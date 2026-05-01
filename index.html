@@ -29,6 +29,7 @@
     background: var(--bg);
     color: var(--text);
     height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -44,6 +45,7 @@
     border-bottom: 1px solid rgba(255,208,0,0.15);
     z-index: 100;
     flex-shrink: 0;
+    min-width: 0;
   }
 
   .logo {
@@ -64,6 +66,22 @@
     flex-shrink: 0;
   }
   .logo span { color: var(--sun); }
+
+
+  .menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 96px;
+    white-space: nowrap;
+  }
+
+  .header-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
 
   .search-bar {
     flex: 1;
@@ -119,6 +137,8 @@
     display: flex;
     flex: 1;
     overflow: hidden;
+    position: relative;
+    min-height: 0;
   }
 
   /* SIDEBAR */
@@ -130,6 +150,31 @@
     flex-direction: column;
     overflow-y: auto;
     flex-shrink: 0;
+    transition: transform 0.25s ease, width 0.25s ease, opacity 0.25s ease, border-color 0.25s ease;
+    z-index: 30;
+  }
+
+  .sidebar-mobile-bar {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 16px 0;
+  }
+
+  .sidebar-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease;
+    z-index: 25;
+  }
+
+  .sidebar-close {
+    display: none;
+    padding: 8px 12px;
   }
 
   .sidebar-section {
@@ -248,6 +293,8 @@
   #map {
     flex: 1;
     position: relative;
+    min-width: 0;
+    min-height: 0;
   }
 
   /* OVERLAY CANVAS */
@@ -382,11 +429,140 @@
     font-size: 12px;
     padding: 20px 0;
   }
+
+
+  body:not(.mobile-layout).desktop-sidebar-hidden .sidebar {
+    width: 0;
+    opacity: 0;
+    border-right-color: transparent;
+    overflow: hidden;
+    pointer-events: none;
+    transform: translateX(-12px);
+  }
+
+  body:not(.mobile-layout).desktop-sidebar-hidden .sidebar > * {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  @media (max-width: 900px) {
+    header {
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 10px 12px;
+    }
+
+    .logo {
+      font-size: 18px;
+    }
+
+    .main {
+      position: relative;
+    }
+
+    .search-bar {
+      order: 3;
+      width: 100%;
+      max-width: none;
+    }
+
+    .header-actions {
+      margin-left: 0;
+    }
+
+    .sidebar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: min(86vw, 340px);
+      max-width: 340px;
+      transform: translateX(-100%);
+      border-right: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 18px 48px rgba(0,0,0,0.45);
+    }
+
+    body.mobile-layout.sidebar-open .sidebar {
+      transform: translateX(0);
+    }
+
+    body.mobile-layout.sidebar-open .sidebar-backdrop {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .sidebar-mobile-bar {
+      display: flex;
+    }
+
+    .sidebar-close {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sidebar-section {
+      padding: 14px;
+    }
+
+    .tool-btn {
+      padding: 14px 10px;
+    }
+
+    .config-row {
+      gap: 12px;
+    }
+
+    .config-value {
+      width: 100px;
+      min-height: 40px;
+    }
+
+    .color-swatch {
+      width: 34px;
+      height: 34px;
+    }
+
+    .instructions {
+      left: 12px;
+      right: 12px;
+      transform: none;
+      white-space: normal;
+      line-height: 1.4;
+      padding: 10px 14px;
+      font-size: 11px;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .search-bar {
+      flex-direction: column;
+    }
+
+    .search-bar .btn,
+    .menu-toggle {
+      width: 100%;
+    }
+
+    .header-actions {
+      width: 100%;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+
+    .mode-badge {
+      flex: 1;
+      min-width: 0;
+      text-align: center;
+    }
+  }
 </style>
 </head>
 <body>
 
 <header>
+  <button class="btn btn-ghost menu-toggle" id="sidebar-toggle" onclick="toggleSidebar()" aria-expanded="true" aria-controls="sidebar">Hide Menu</button>
+
   <div class="logo">
     <div class="sun-icon">☀</div>
     Solar<span>Sketch</span>
@@ -397,8 +573,8 @@
     <button class="btn btn-sun" onclick="searchAddress()">Go</button>
   </div>
 
-  <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
-    <span id="mode-badge" style="font-size:11px; color:var(--text-dim); background:var(--surface2); padding:4px 10px; border-radius:6px;">
+  <div class="header-actions">
+    <span id="mode-badge" class="mode-badge" style="font-size:11px; color:var(--text-dim); background:var(--surface2); padding:4px 10px; border-radius:6px;">
       🗂 Demo Mode
     </span>
     <button class="btn btn-ghost" onclick="showApiKeyDialog()" title="Connect Google Maps API">🗺 Use Real Map</button>
@@ -406,8 +582,14 @@
 </header>
 
 <div class="main">
+  <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeSidebar()"></div>
+
   <!-- SIDEBAR -->
-  <div class="sidebar">
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-mobile-bar">
+      <div style="font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--sun);">Planner Menu</div>
+      <button class="btn btn-ghost sidebar-close" onclick="closeSidebar()" aria-label="Close menu">✕</button>
+    </div>
 
     <!-- TOOLS -->
     <div class="sidebar-section">
@@ -561,6 +743,7 @@ let gmapDrawingPath = [];
 let gmapPreviewPolyline = null;
 let gmapPreviewLatLng = null;
 let gmapStartHandle = null;
+let lastResponsiveMobile = null;
 
 let canvas, ctx2d;
 let W, H;
@@ -572,10 +755,14 @@ window.addEventListener('load', () => {
   canvas = document.getElementById('demo-canvas');
   ctx2d = canvas.getContext('2d');
   resizeCanvas();
-  window.addEventListener('resize', resizeCanvas);
+  syncResponsiveLayout();
+  window.addEventListener('resize', onWindowResize);
 
   canvas.addEventListener('click', onCanvasClick);
   canvas.addEventListener('dblclick', onCanvasDoubleClick);
+  document.getElementById('address-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') searchAddress();
+  });
   canvas.addEventListener('mousemove', onCanvasMouseMove);
   canvas.addEventListener('contextmenu', onCanvasRightClick);
   document.addEventListener('click', hideCtxMenu);
@@ -590,6 +777,94 @@ function resizeCanvas() {
   W = canvas.width = rect.width;
   H = canvas.height = rect.height;
   redrawAll();
+}
+
+function onWindowResize() {
+  resizeCanvas();
+  syncResponsiveLayout();
+}
+
+function isMobileLayout() {
+  return window.innerWidth <= 900;
+}
+
+function syncSidebarButton() {
+  const btn = document.getElementById('sidebar-toggle');
+  if (!btn) return;
+
+  const mobile = isMobileLayout();
+  const isOpen = mobile
+    ? document.body.classList.contains('sidebar-open')
+    : !document.body.classList.contains('desktop-sidebar-hidden');
+
+  btn.textContent = mobile ? (isOpen ? '✕ Menu' : '☰ Menu') : (isOpen ? 'Hide Menu' : 'Show Menu');
+  btn.setAttribute('aria-expanded', String(isOpen));
+}
+
+function notifyMapResize() {
+  if (!gmap || !window.google) return;
+  const center = gmap.getCenter();
+  setTimeout(() => {
+    google.maps.event.trigger(gmap, 'resize');
+    if (center) gmap.setCenter(center);
+  }, 260);
+}
+
+function syncResponsiveLayout() {
+  const mobile = isMobileLayout();
+  document.body.classList.toggle('mobile-layout', mobile);
+
+  if (mobile) {
+    document.body.classList.remove('desktop-sidebar-hidden');
+    if (lastResponsiveMobile !== true) document.body.classList.remove('sidebar-open');
+  } else {
+    document.body.classList.remove('sidebar-open');
+    if (lastResponsiveMobile !== false) document.body.classList.remove('desktop-sidebar-hidden');
+  }
+
+  syncSidebarButton();
+
+  if (lastResponsiveMobile !== mobile) {
+    notifyMapResize();
+  }
+
+  lastResponsiveMobile = mobile;
+}
+
+function openSidebar() {
+  if (isMobileLayout()) {
+    document.body.classList.add('sidebar-open');
+  } else {
+    document.body.classList.remove('desktop-sidebar-hidden');
+  }
+  syncSidebarButton();
+  notifyMapResize();
+}
+
+function closeSidebar() {
+  if (isMobileLayout()) {
+    document.body.classList.remove('sidebar-open');
+  } else {
+    document.body.classList.add('desktop-sidebar-hidden');
+  }
+  syncSidebarButton();
+  notifyMapResize();
+}
+
+function toggleSidebar() {
+  if (isMobileLayout()) {
+    document.body.classList.toggle('sidebar-open');
+  } else {
+    document.body.classList.toggle('desktop-sidebar-hidden');
+  }
+  syncSidebarButton();
+  notifyMapResize();
+}
+
+function closeSidebarOnMobile() {
+  if (!isMobileLayout()) return;
+  document.body.classList.remove('sidebar-open');
+  syncSidebarButton();
 }
 
 // ============================================================
@@ -981,6 +1256,7 @@ function renderZonesList() {
     if (gmap && window.google) syncGmapSelection();
     renderZonesList();
     redrawAll();
+    closeSidebarOnMobile();
   }
 
 function deleteZoneById(id) {
@@ -1024,6 +1300,7 @@ function setTool(tool) {
 
   syncGmapInteractionState();
   updateInstructions();
+  closeSidebarOnMobile();
 }
 
 function updateInstructions() {
@@ -1248,6 +1525,7 @@ window.initGoogleMap = function() {
   document.getElementById('demo-map').style.display = 'none';
   document.getElementById('gmap-container').style.display = 'block';
   document.getElementById('mode-badge').textContent = '🗺 Google Maps';
+  closeSidebarOnMobile();
 
   gmap = new google.maps.Map(document.getElementById('gmap-container'), {
     center: { lat: 48.8566, lng: 2.3522 },
@@ -1538,6 +1816,7 @@ function updateGmapZone(zone) {
 function searchAddress() {
   const addr = document.getElementById('address-input').value.trim();
   if (!addr) return;
+  closeSidebarOnMobile();
 
   if (gmap && window.google) {
     const geocoder = new google.maps.Geocoder();

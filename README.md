@@ -8,6 +8,7 @@ Draw roof zones on satellite imagery and estimate how many solar panels fit in r
 - Close a zone by clicking near the start point
 - Live panel-fit recalculation as zones or panel settings change
 - Visual placement of panel rectangles inside each zone
+- Responsive mobile layout with slide-in / hideable side menu
 - Demo mode included when Google Maps is not connected
 - Export a simple planning report
 
@@ -25,7 +26,7 @@ Then open `http://localhost:8000`.
 
 ## Google Maps API setup
 
-This app asks for your Google Maps API key at runtime.
+This app asks for your Google Maps API key at runtime. The UI is responsive and supports mobile screens with a toggleable planner menu.
 
 Enable:
 
