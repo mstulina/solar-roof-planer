@@ -1,0 +1,1618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SolarSketch — Roof Panel Planner</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap');
+
+  :root {
+    --sun: #FFD000;
+    --sun-dim: #B89200;
+    --panel: #1A3A5C;
+    --panel-border: #4FC3F7;
+    --bg: #0A0E1A;
+    --surface: #111827;
+    --surface2: #1C2535;
+    --text: #E8EDF5;
+    --text-dim: #6B7A99;
+    --green: #00E676;
+    --red: #FF5252;
+    --accent: #FF9800;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid rgba(255,208,0,0.15);
+    z-index: 100;
+    flex-shrink: 0;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+  .logo .sun-icon {
+    width: 32px; height: 32px;
+    background: var(--sun);
+    border-radius: 50%;
+    box-shadow: 0 0 16px var(--sun), 0 0 32px rgba(255,208,0,0.3);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .logo span { color: var(--sun); }
+
+  .search-bar {
+    flex: 1;
+    max-width: 420px;
+    display: flex;
+    gap: 8px;
+  }
+  .search-bar input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid rgba(255,208,0,0.2);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 8px 14px;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-bar input:focus { border-color: var(--sun); }
+  .search-bar input::placeholder { color: var(--text-dim); }
+
+  .btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    transition: all 0.15s;
+  }
+  .btn-sun {
+    background: var(--sun);
+    color: #000;
+  }
+  .btn-sun:hover { background: #FFE040; box-shadow: 0 0 12px rgba(255,208,0,0.4); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .btn-ghost:hover { color: var(--text); border-color: rgba(255,255,255,0.25); }
+  .btn-danger {
+    background: transparent;
+    color: var(--red);
+    border: 1px solid rgba(255,82,82,0.3);
+  }
+  .btn-danger:hover { background: rgba(255,82,82,0.1); }
+
+  /* MAIN LAYOUT */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 280px;
+    background: var(--surface);
+    border-right: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+
+  .sidebar-section {
+    padding: 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .sidebar-section h3 {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  /* TOOLS */
+  .tools-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .tool-btn {
+    background: var(--surface2);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 12px 8px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .tool-btn:hover { border-color: rgba(255,208,0,0.3); background: rgba(255,208,0,0.05); }
+  .tool-btn.active {
+    border-color: var(--sun);
+    background: rgba(255,208,0,0.1);
+  }
+  .tool-icon { font-size: 22px; }
+  .tool-label { font-size: 11px; font-weight: 600; color: var(--text-dim); }
+  .tool-btn.active .tool-label { color: var(--sun); }
+
+  /* PANEL CONFIG */
+  .config-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .config-label { font-size: 12px; color: var(--text-dim); }
+  .config-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+    background: var(--surface2);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    padding: 4px 8px;
+    width: 90px;
+    text-align: right;
+  }
+  .config-value:focus { outline: none; border-color: var(--sun); }
+
+  /* COLOR PICKER */
+  .color-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .color-swatch {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.15s;
+  }
+  .color-swatch.selected { border-color: white; }
+
+  /* STATS */
+  .stat-card {
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 8px;
+  }
+  .stat-label { font-size: 10px; color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+  .stat-value { font-family: 'Space Mono', monospace; font-size: 22px; font-weight: 700; color: var(--sun); }
+  .stat-unit { font-size: 12px; color: var(--text-dim); margin-left: 4px; }
+
+  .stat-row { display: flex; gap: 8px; }
+  .stat-row .stat-card { flex: 1; }
+  .stat-row .stat-value { font-size: 16px; }
+
+  /* ZONES LIST */
+  .zone-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--surface2);
+    border-radius: 8px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+  }
+  .zone-item:hover { border-color: rgba(255,255,255,0.1); }
+  .zone-item.selected { border-color: var(--sun); }
+  .zone-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+  .zone-info { flex: 1; min-width: 0; }
+  .zone-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .zone-panels { font-size: 10px; color: var(--text-dim); }
+  .zone-del { background: none; border: none; cursor: pointer; color: var(--text-dim); padding: 2px 4px; font-size: 14px; }
+  .zone-del:hover { color: var(--red); }
+
+  /* MAP */
+  #map {
+    flex: 1;
+    position: relative;
+  }
+
+  /* OVERLAY CANVAS */
+  #overlay-canvas {
+    position: absolute;
+    top: 0; left: 0;
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  /* MAP PLACEHOLDER */
+  #map-placeholder {
+    width: 100%; height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #0D1B2A;
+    gap: 20px;
+  }
+
+  .placeholder-icon { font-size: 60px; }
+  .placeholder-title { font-size: 24px; font-weight: 800; color: var(--sun); }
+  .placeholder-text { font-size: 14px; color: var(--text-dim); text-align: center; max-width: 360px; line-height: 1.6; }
+
+  /* API key form */
+  .api-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    max-width: 400px;
+    padding: 20px;
+    background: var(--surface);
+    border-radius: 14px;
+    border: 1px solid rgba(255,208,0,0.2);
+  }
+  .api-form label { font-size: 12px; color: var(--text-dim); }
+  .api-form input {
+    background: var(--surface2);
+    border: 1px solid rgba(255,208,0,0.2);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 10px 14px;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    outline: none;
+  }
+  .api-form input:focus { border-color: var(--sun); }
+
+  /* INSTRUCTIONS TOAST */
+  .instructions {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(10,14,26,0.9);
+    border: 1px solid rgba(255,208,0,0.3);
+    border-radius: 10px;
+    padding: 10px 18px;
+    font-size: 12px;
+    color: var(--text-dim);
+    z-index: 10;
+    pointer-events: none;
+    backdrop-filter: blur(10px);
+    white-space: nowrap;
+  }
+  .instructions b { color: var(--sun); }
+
+  /* DEMO CANVAS MODE */
+  #demo-map {
+    width: 100%; height: 100%;
+    position: relative;
+    background: #1a2a1a;
+    overflow: hidden;
+    cursor: crosshair;
+  }
+
+  .demo-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* Fake satellite buildings */
+  .fake-building {
+    position: absolute;
+    background: #2a3a2a;
+    border: 1px solid #3a4a3a;
+  }
+
+  /* context menu */
+  .ctx-menu {
+    position: fixed;
+    background: var(--surface);
+    border: 1px solid rgba(255,208,0,0.2);
+    border-radius: 10px;
+    padding: 6px;
+    z-index: 1000;
+    min-width: 160px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .ctx-item {
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.1s;
+  }
+  .ctx-item:hover { background: rgba(255,255,255,0.07); }
+  .ctx-item.danger { color: var(--red); }
+
+  /* Export button */
+  .btn-export {
+    background: linear-gradient(135deg, var(--sun) 0%, var(--accent) 100%);
+    color: #000;
+    font-weight: 700;
+    width: 100%;
+    padding: 10px;
+    margin-top: 8px;
+  }
+
+  .no-zones {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 12px;
+    padding: 20px 0;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="sun-icon">☀</div>
+    Solar<span>Sketch</span>
+  </div>
+
+  <div class="search-bar">
+    <input type="text" id="address-input" placeholder="Search address or coordinates…" />
+    <button class="btn btn-sun" onclick="searchAddress()">Go</button>
+  </div>
+
+  <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+    <span id="mode-badge" style="font-size:11px; color:var(--text-dim); background:var(--surface2); padding:4px 10px; border-radius:6px;">
+      🗂 Demo Mode
+    </span>
+    <button class="btn btn-ghost" onclick="showApiKeyDialog()" title="Connect Google Maps API">🗺 Use Real Map</button>
+  </div>
+</header>
+
+<div class="main">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <!-- TOOLS -->
+    <div class="sidebar-section">
+      <h3>Tools</h3>
+      <div class="tools-grid">
+        <div class="tool-btn" id="tool-draw" onclick="setTool('draw')">
+          <span class="tool-icon">✏️</span>
+          <span class="tool-label">Draw Zone</span>
+        </div>
+        <div class="tool-btn active" id="tool-select" onclick="setTool('select')">
+          <span class="tool-icon">🖱️</span>
+          <span class="tool-label">Select</span>
+        </div>
+        <div class="tool-btn" id="tool-pan" onclick="setTool('pan')">
+          <span class="tool-icon">✋</span>
+          <span class="tool-label">Pan</span>
+        </div>
+        <div class="tool-btn" id="tool-erase" onclick="setTool('erase')">
+          <span class="tool-icon">🗑️</span>
+          <span class="tool-label">Erase</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL CONFIG -->
+    <div class="sidebar-section">
+      <h3>Panel Settings</h3>
+      <div class="config-row">
+        <span class="config-label">Width (m)</span>
+        <input class="config-value" type="number" id="panel-width" value="1.0" step="0.05" min="0.5" max="3" oninput="updateStats()">
+      </div>
+      <div class="config-row">
+        <span class="config-label">Height (m)</span>
+        <input class="config-value" type="number" id="panel-height" value="1.7" step="0.05" min="0.5" max="3" oninput="updateStats()">
+      </div>
+      <div class="config-row">
+        <span class="config-label">Watts/panel</span>
+        <input class="config-value" type="number" id="panel-watts" value="400" step="10" min="100" max="800" oninput="updateStats()">
+      </div>
+      <div class="config-row">
+        <span class="config-label">Spacing (m)</span>
+        <input class="config-value" type="number" id="panel-spacing" value="0.05" step="0.01" min="0" max="0.5" oninput="updateStats()">
+      </div>
+      <div class="config-row">
+        <span class="config-label">Scale (m/px)</span>
+        <input class="config-value" type="number" id="map-scale" value="0.15" step="0.01" min="0.01" max="5" oninput="updateStats()">
+      </div>
+
+      <div style="margin-top:4px;">
+        <div style="font-size:11px; color:var(--text-dim); margin-bottom:6px;">Zone Color</div>
+        <div class="color-row" id="color-picker">
+          <div class="color-swatch selected" style="background:#1A3A5C;" data-color="#1A3A5C" onclick="selectColor(this)"></div>
+          <div class="color-swatch" style="background:#1A5C3A;" data-color="#1A5C3A" onclick="selectColor(this)"></div>
+          <div class="color-swatch" style="background:#5C1A2A;" data-color="#5C1A2A" onclick="selectColor(this)"></div>
+          <div class="color-swatch" style="background:#4A3A00;" data-color="#4A3A00" onclick="selectColor(this)"></div>
+          <div class="color-swatch" style="background:#2A1A5C;" data-color="#2A1A5C" onclick="selectColor(this)"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <div class="sidebar-section">
+      <h3>System Output</h3>
+      <div class="stat-card">
+        <div class="stat-label">Total Panels</div>
+        <div><span class="stat-value" id="stat-panels">0</span></div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-label">kWp</div>
+          <div><span class="stat-value" id="stat-kwp">0</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Area m²</div>
+          <div><span class="stat-value" id="stat-area">0</span></div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Est. Annual kWh</div>
+        <div><span class="stat-value" id="stat-kwh">0</span></div>
+      </div>
+      <button class="btn btn-export" onclick="exportReport()">⬇ Export Report</button>
+    </div>
+
+    <!-- ZONES -->
+    <div class="sidebar-section" style="flex:1;">
+      <h3>Roof Zones</h3>
+      <div id="zones-list"><div class="no-zones">Draw zones on the map →</div></div>
+    </div>
+
+  </div>
+
+  <!-- MAP AREA -->
+  <div id="map" style="position:relative; flex:1;">
+    <!-- Demo canvas (shown when no real Maps API) -->
+    <div id="demo-map">
+      <div class="demo-grid"></div>
+      <!-- Fake satellite rooftop -->
+      <canvas id="demo-canvas" style="position:absolute;inset:0;width:100%;height:100%;"></canvas>
+    </div>
+
+    <!-- Google Maps container (hidden until API key entered) -->
+    <div id="gmap-container" style="width:100%;height:100%;display:none;"></div>
+
+    <!-- Instructions -->
+    <div class="instructions" id="instructions">
+      <b>✏ Draw mode:</b> Click to add points, double-click to close zone &nbsp;|&nbsp; <b>🖱 Select:</b> Click zone to select
+    </div>
+  </div>
+</div>
+
+<!-- CONTEXT MENU -->
+<div class="ctx-menu" id="ctx-menu" style="display:none;">
+  <div class="ctx-item" onclick="ctxDeleteZone()"><span>🗑</span> Delete Zone</div>
+  <div class="ctx-item" onclick="ctxDuplicateZone()"><span>📋</span> Duplicate Zone</div>
+  <div class="ctx-item" onclick="hideCtxMenu()">✕ Cancel</div>
+</div>
+
+<!-- API KEY DIALOG -->
+<div id="api-dialog" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:2000; align-items:center; justify-content:center;">
+  <div style="background:var(--surface); border:1px solid rgba(255,208,0,0.3); border-radius:16px; padding:28px; max-width:460px; width:90%;">
+    <h2 style="margin-bottom:8px; font-size:20px;">Connect Google Maps</h2>
+    <p style="color:var(--text-dim); font-size:13px; margin-bottom:20px; line-height:1.6;">
+      Enter your Google Maps JavaScript API key to enable satellite imagery and real address search.
+      <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--sun);">Get a free API key →</a>
+    </p>
+    <div class="api-form">
+      <label>Google Maps API Key</label>
+      <input type="text" id="gapi-key" placeholder="AIza..." />
+      <button class="btn btn-sun" onclick="loadGoogleMaps()">Connect Maps</button>
+      <button class="btn btn-ghost" onclick="closeApiDialog()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let currentTool = 'select';
+let zones = [];           // { id, name, color, points[], panelCount, area }
+let selectedZone = null;
+let ctxZone = null;
+let activeColor = '#1A3A5C';
+let drawPoints = [];
+let isDrawing = false;
+let mousePos = { x: 0, y: 0 };
+let gmap = null;
+let gmapPolygons = {};
+let gmapDrawingPath = [];
+let gmapPreviewPolyline = null;
+let gmapPreviewLatLng = null;
+let gmapStartHandle = null;
+
+let canvas, ctx2d;
+let W, H;
+
+// ============================================================
+// INIT
+// ============================================================
+window.addEventListener('load', () => {
+  canvas = document.getElementById('demo-canvas');
+  ctx2d = canvas.getContext('2d');
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  canvas.addEventListener('click', onCanvasClick);
+  canvas.addEventListener('dblclick', onCanvasDoubleClick);
+  canvas.addEventListener('mousemove', onCanvasMouseMove);
+  canvas.addEventListener('contextmenu', onCanvasRightClick);
+  document.addEventListener('click', hideCtxMenu);
+
+  drawBackground();
+  setTool('draw');
+  updateInstructions();
+});
+
+function resizeCanvas() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  W = canvas.width = rect.width;
+  H = canvas.height = rect.height;
+  redrawAll();
+}
+
+// ============================================================
+// FAKE SATELLITE BACKGROUND
+// ============================================================
+function drawBackground() {
+  // Nice fake roof overhead view
+  if (!ctx2d) return;
+  const c = ctx2d;
+
+  // Sky/ground green
+  c.fillStyle = '#243a24';
+  c.fillRect(0, 0, W, H);
+
+  // Roads
+  c.strokeStyle = '#3a4a3a';
+  c.lineWidth = 18;
+  c.beginPath(); c.moveTo(0, H*0.45); c.lineTo(W, H*0.45); c.stroke();
+  c.beginPath(); c.moveTo(W*0.55, 0); c.lineTo(W*0.55, H); c.stroke();
+
+  // Road center lines
+  c.strokeStyle = '#4a5a4a';
+  c.lineWidth = 1;
+  c.setLineDash([20,15]);
+  c.beginPath(); c.moveTo(0, H*0.45); c.lineTo(W, H*0.45); c.stroke();
+  c.beginPath(); c.moveTo(W*0.55, 0); c.lineTo(W*0.55, H); c.stroke();
+  c.setLineDash([]);
+
+  // Buildings (fake rooftops)
+  const buildings = [
+    { x: 0.05, y: 0.05, w: 0.28, h: 0.30, color: '#2d3d2d', roof: '#354535' },
+    { x: 0.06, y: 0.55, w: 0.22, h: 0.35, color: '#2d3d2d', roof: '#354535' },
+    { x: 0.60, y: 0.05, w: 0.35, h: 0.28, color: '#2a3a2a', roof: '#325032' },
+    { x: 0.62, y: 0.52, w: 0.30, h: 0.38, color: '#2a3a2a', roof: '#325032' },
+    { x: 0.35, y: 0.10, w: 0.12, h: 0.18, color: '#303a30', roof: '#3a503a' },
+    { x: 0.35, y: 0.56, w: 0.15, h: 0.20, color: '#303a30', roof: '#3a503a' },
+  ];
+
+  buildings.forEach(b => {
+    const bx = b.x * W, by = b.y * H, bw = b.w * W, bh = b.h * H;
+    // Shadow
+    c.fillStyle = 'rgba(0,0,0,0.3)';
+    c.fillRect(bx+4, by+4, bw, bh);
+    // Body
+    c.fillStyle = b.color;
+    c.fillRect(bx, by, bw, bh);
+    // Roof highlight
+    c.fillStyle = b.roof;
+    c.fillRect(bx+6, by+6, bw-12, bh-12);
+    // Ridge line
+    c.strokeStyle = 'rgba(255,255,255,0.08)';
+    c.lineWidth = 1;
+    c.beginPath();
+    c.moveTo(bx + bw/2, by + 8);
+    c.lineTo(bx + bw/2, by + bh - 8);
+    c.stroke();
+  });
+
+  // Trees (circles)
+  const trees = [[0.48,0.12],[0.50,0.55],[0.52,0.62],[0.30,0.35],[0.05,0.40],[0.95,0.35],[0.20,0.82]];
+  trees.forEach(([tx, ty]) => {
+    const px = tx*W, py = ty*H;
+    c.fillStyle = '#1a3a1a';
+    c.beginPath(); c.arc(px, py, 12, 0, Math.PI*2); c.fill();
+    c.fillStyle = '#254025';
+    c.beginPath(); c.arc(px-2, py-2, 9, 0, Math.PI*2); c.fill();
+  });
+}
+
+// ============================================================
+// DRAW ZONES + PANELS
+// ============================================================
+function redrawAll() {
+  if (!ctx2d) return;
+  ctx2d.clearRect(0, 0, W, H);
+  drawBackground();
+
+  // Draw demo-canvas zones only. Google Maps zones are rendered on the map itself.
+  zones.forEach(z => {
+    if (Array.isArray(z.points) && z.points.length >= 3) {
+      drawZone(z, z === selectedZone);
+    }
+  });
+
+  // Draw in-progress zone
+  if (isDrawing && drawPoints.length > 0) {
+    drawInProgress();
+  }
+}
+
+function drawZone(zone, selected) {
+  if (!Array.isArray(zone.points) || zone.points.length < 3) return;
+  const c = ctx2d;
+  const pts = zone.points;
+
+  // Fill zone polygon
+  c.beginPath();
+  c.moveTo(pts[0].x, pts[0].y);
+  pts.slice(1).forEach(p => c.lineTo(p.x, p.y));
+  c.closePath();
+
+  c.fillStyle = zone.color + '55';
+  c.fill();
+  c.strokeStyle = selected ? '#FFD000' : '#4FC3F7';
+  c.lineWidth = selected ? 2.5 : 1.5;
+  c.stroke();
+
+  // Draw solar panels inside
+  drawPanelsInZone(zone);
+
+  // Zone label
+  const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length;
+  const cy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+  c.fillStyle = 'rgba(0,0,0,0.6)';
+  c.fillRect(cx - 40, cy - 12, 80, 22);
+  c.fillStyle = '#fff';
+  c.font = 'bold 11px Syne, sans-serif';
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.fillText(`${zone.name} (${zone.panelCount}p)`, cx, cy);
+}
+
+function drawPanelsInZone(zone) {
+  if (!Array.isArray(zone.points) || zone.points.length < 3) return;
+  const c = ctx2d;
+
+  const scale = parseFloat(document.getElementById('map-scale').value) || 0.15;
+  const pw = parseFloat(document.getElementById('panel-width').value) / scale;
+  const ph = parseFloat(document.getElementById('panel-height').value) / scale;
+  const gap = parseFloat(document.getElementById('panel-spacing').value) / scale;
+  const layout = computePanelLayoutInPolygon(zone.points, pw, ph, gap, true);
+
+  layout.placements.forEach(panel => {
+    drawPanel(c, panel.x, panel.y, panel.w, panel.h, zone.color);
+  });
+
+  zone.panelCount = layout.count;
+
+  // Update area
+  zone.area = Math.abs(polygonArea(zone.points)) * scale * scale;
+}
+
+function drawPanel(c, x, y, w, h, baseColor) {
+  // Panel body
+  const grad = c.createLinearGradient(x, y, x+w, y+h);
+  grad.addColorStop(0, '#1a3d6e');
+  grad.addColorStop(0.5, '#0f2a4e');
+  grad.addColorStop(1, '#162f5c');
+  c.fillStyle = grad;
+  c.fillRect(x, y, w, h);
+
+  // Grid lines
+  c.strokeStyle = 'rgba(79,195,247,0.35)';
+  c.lineWidth = 0.5;
+
+  // Vertical cell divisions (3 cells wide)
+  for (let i = 1; i < 3; i++) {
+    const lx = x + (w * i / 3);
+    c.beginPath(); c.moveTo(lx, y); c.lineTo(lx, y+h); c.stroke();
+  }
+  // Horizontal cell divisions (4 cells tall)
+  for (let i = 1; i < 4; i++) {
+    const ly = y + (h * i / 4);
+    c.beginPath(); c.moveTo(x, ly); c.lineTo(x+w, ly); c.stroke();
+  }
+
+  // Outer border
+  c.strokeStyle = 'rgba(79,195,247,0.7)';
+  c.lineWidth = 0.8;
+  c.strokeRect(x, y, w, h);
+
+  // Tiny shine highlight
+  c.fillStyle = 'rgba(255,255,255,0.06)';
+  c.fillRect(x+1, y+1, w*0.4, h*0.3);
+}
+
+function drawInProgress() {
+  const c = ctx2d;
+  const pts = drawPoints;
+  if (!pts.length) return;
+
+  c.beginPath();
+  c.moveTo(pts[0].x, pts[0].y);
+  pts.forEach(p => c.lineTo(p.x, p.y));
+  c.lineTo(mousePos.x, mousePos.y);
+
+  c.strokeStyle = '#FFD000';
+  c.lineWidth = 2;
+  c.setLineDash([6, 4]);
+  c.stroke();
+  c.setLineDash([]);
+
+  // Points
+  pts.forEach((p, i) => {
+    c.beginPath();
+    c.arc(p.x, p.y, i === 0 ? 7 : 4, 0, Math.PI * 2);
+    c.fillStyle = i === 0 ? '#FFD000' : '#fff';
+    c.fill();
+  });
+
+  // Close hint
+  if (pts.length >= 3) {
+    const d = Math.hypot(mousePos.x - pts[0].x, mousePos.y - pts[0].y);
+    if (d < 20) {
+      c.beginPath();
+      c.arc(pts[0].x, pts[0].y, 10, 0, Math.PI*2);
+      c.strokeStyle = '#00E676';
+      c.lineWidth = 2;
+      c.stroke();
+    }
+  }
+}
+
+// ============================================================
+// CANVAS EVENTS
+// ============================================================
+function onCanvasClick(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  if (currentTool === 'draw') {
+    // Snap to close if near first point
+    if (isDrawing && drawPoints.length >= 3) {
+      const d = Math.hypot(x - drawPoints[0].x, y - drawPoints[0].y);
+      if (d < 20) {
+        closeZone();
+        return;
+      }
+    }
+    if (!isDrawing) isDrawing = true;
+    drawPoints.push({ x, y });
+    redrawAll();
+  }
+
+  else if (currentTool === 'select' || currentTool === 'erase') {
+    // Find zone under click
+    const hit = zones.find(z => z.points.length >= 3 && pointInPolygon(x, y, z.points));
+    if (hit) {
+      if (currentTool === 'erase') {
+        deleteZone(hit);
+      } else {
+        selectedZone = hit;
+        renderZonesList();
+        redrawAll();
+      }
+    } else {
+      selectedZone = null;
+      renderZonesList();
+      redrawAll();
+    }
+  }
+}
+
+function onCanvasDoubleClick(e) {
+  if (currentTool === 'draw' && isDrawing && drawPoints.length >= 3) {
+    closeZone();
+  }
+}
+
+function onCanvasMouseMove(e) {
+  const rect = canvas.getBoundingClientRect();
+  mousePos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  if (isDrawing) redrawAll();
+
+  // Cursor
+  if (currentTool === 'draw') canvas.style.cursor = 'crosshair';
+  else if (currentTool === 'pan') canvas.style.cursor = 'grab';
+  else if (currentTool === 'erase') canvas.style.cursor = 'not-allowed';
+  else canvas.style.cursor = 'default';
+}
+
+function onCanvasRightClick(e) {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  if (isDrawing) {
+    cancelDraw();
+    return;
+  }
+
+  const hit = zones.find(z => z.points.length >= 3 && pointInPolygon(x, y, z.points));
+  if (hit) {
+    ctxZone = hit;
+    const menu = document.getElementById('ctx-menu');
+    menu.style.display = 'block';
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+  }
+}
+
+function hideCtxMenu(e) {
+  const menu = document.getElementById('ctx-menu');
+  if (!e || !menu.contains(e.target)) {
+    menu.style.display = 'none';
+  }
+}
+
+// ============================================================
+// ZONE MANAGEMENT
+// ============================================================
+function closeZone() {
+  if (drawPoints.length < 3) { cancelDraw(); return; }
+
+  const id = Date.now();
+  const zone = {
+    id,
+    name: `Zone ${zones.length + 1}`,
+    color: activeColor,
+    points: [...drawPoints],
+    panelCount: 0,
+    area: 0
+  };
+
+  zones.push(zone);
+  selectedZone = zone;
+  cancelDraw();
+  renderZonesList();
+  updateStats();
+  redrawAll();
+}
+
+function cancelDraw() {
+  isDrawing = false;
+  drawPoints = [];
+  redrawAll();
+}
+
+  function deleteZone(zone) {
+    if (zone.gmPoly) {
+      zone.gmPoly.setMap(null);
+      delete gmapPolygons[zone.id];
+    }
+    clearGmapPanels(zone);
+
+    zones = zones.filter(z => z !== zone);
+
+    if (selectedZone === zone) selectedZone = null;
+
+    renderZonesList();
+    syncGmapSelection();
+    updateStats();
+    redrawAll();
+  }
+
+function ctxDeleteZone() {
+  if (ctxZone) deleteZone(ctxZone);
+  hideCtxMenu();
+}
+
+function ctxDuplicateZone() {
+  if (!ctxZone) return;
+  const offset = 20;
+  const zone = {
+    ...ctxZone,
+    id: Date.now(),
+    name: ctxZone.name + ' (copy)',
+    points: ctxZone.points.map(p => ({ x: p.x + offset, y: p.y + offset }))
+  };
+  zones.push(zone);
+  renderZonesList();
+  updateStats();
+  redrawAll();
+  hideCtxMenu();
+}
+
+function renderZonesList() {
+  const list = document.getElementById('zones-list');
+  if (!zones.length) {
+    list.innerHTML = '<div class="no-zones">Draw zones on the map →</div>';
+    return;
+  }
+  list.innerHTML = zones.map(z => `
+    <div class="zone-item ${z === selectedZone ? 'selected' : ''}" onclick="selectZone('${z.id}')">
+      <div class="zone-dot" style="background:${z.color};"></div>
+      <div class="zone-info">
+        <div class="zone-name">${z.name}</div>
+        <div class="zone-panels">${z.panelCount} panels · ${z.area.toFixed(1)} m²</div>
+      </div>
+      <button class="zone-del" onclick="event.stopPropagation(); deleteZoneById('${z.id}')">✕</button>
+    </div>
+  `).join('');
+}
+
+  function selectZone(id) {
+    selectedZone = zones.find(z => z.id == id) || null;
+    if (gmap && window.google) syncGmapSelection();
+    renderZonesList();
+    redrawAll();
+  }
+
+function deleteZoneById(id) {
+  const z = zones.find(z => z.id == id);
+  if (z) deleteZone(z);
+}
+
+// ============================================================
+// STATS
+// ============================================================
+function updateStats() {
+  redrawAll(); // triggers panel count recalc for demo mode
+  if (gmap && window.google) {
+    zones.forEach(z => {
+      if (z.gmPoly) updateGmapZone(z);
+    });
+  }
+  const totalPanels = zones.reduce((a, z) => a + z.panelCount, 0);
+  const watts = parseFloat(document.getElementById('panel-watts').value) || 400;
+  const totalArea = zones.reduce((a, z) => a + z.area, 0);
+  const kwp = (totalPanels * watts / 1000);
+  const annualKwh = kwp * 1100; // assume ~1100 peak sun hours/yr
+
+  document.getElementById('stat-panels').textContent = totalPanels;
+  document.getElementById('stat-kwp').textContent = kwp.toFixed(1);
+  document.getElementById('stat-area').textContent = totalArea.toFixed(0);
+  document.getElementById('stat-kwh').textContent = Math.round(annualKwh).toLocaleString();
+  renderZonesList();
+}
+
+// ============================================================
+// TOOLS
+// ============================================================
+function setTool(tool) {
+  currentTool = tool;
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tool-' + tool).classList.add('active');
+
+  if (tool !== 'draw' && isDrawing) cancelDraw();
+  if (tool !== 'draw') cancelGmapDrawing();
+
+  syncGmapInteractionState();
+  updateInstructions();
+}
+
+function updateInstructions() {
+  const msgs = {
+    draw: '<b>✏ Draw:</b> Click to add corners · click back near the yellow start point to close · double-click / right-click / Enter also finish · Esc cancels',
+    select: '<b>🖱 Select:</b> Click a zone · Right-click for options',
+    pan: '<b>✋ Pan:</b> Click and drag to pan the map',
+    erase: '<b>🗑 Erase:</b> Click a zone to delete it'
+  };
+  document.getElementById('instructions').innerHTML = msgs[currentTool] || '';
+}
+
+function selectColor(el) {
+  document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+  el.classList.add('selected');
+  activeColor = el.dataset.color;
+}
+
+// ============================================================
+// GEOMETRY UTILS
+// ============================================================
+function pointInPolygon(x, y, points) {
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const xi = points[i].x, yi = points[i].y;
+    const xj = points[j].x, yj = points[j].y;
+    if (((yi > y) !== (yj > y)) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function polygonArea(points) {
+  let area = 0;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    area += points[j].x * points[i].y;
+    area -= points[i].x * points[j].y;
+  }
+  return area / 2;
+}
+
+function getLatLngLocalFrame(pathLike) {
+  const latLngs = [];
+  if (!pathLike) return { latLngs: [], points: [], originLat: 0, originLng: 0, latScale: 1, lngScale: 1 };
+
+  if (Array.isArray(pathLike)) {
+    latLngs.push(...pathLike);
+  } else if (typeof pathLike.getLength === 'function' && typeof pathLike.getAt === 'function') {
+    for (let i = 0; i < pathLike.getLength(); i++) latLngs.push(pathLike.getAt(i));
+  }
+
+  if (!latLngs.length) {
+    return { latLngs: [], points: [], originLat: 0, originLng: 0, latScale: 1, lngScale: 1 };
+  }
+
+  const earthRadius = 6378137;
+  const originLat = latLngs.reduce((sum, ll) => sum + ll.lat(), 0) / latLngs.length;
+  const originLng = latLngs.reduce((sum, ll) => sum + ll.lng(), 0) / latLngs.length;
+  const latScale = Math.PI / 180 * earthRadius;
+  const lngScale = Math.max(0.000001, Math.PI / 180 * earthRadius * Math.cos(originLat * Math.PI / 180));
+
+  return {
+    latLngs,
+    originLat,
+    originLng,
+    latScale,
+    lngScale,
+    points: latLngs.map(ll => ({
+      x: (ll.lng() - originLng) * lngScale,
+      y: (ll.lat() - originLat) * latScale
+    }))
+  };
+}
+
+function latLngPathToLocalMeters(pathLike) {
+  return getLatLngLocalFrame(pathLike).points;
+}
+
+function localMetersToLatLng(frame, x, y) {
+  return new google.maps.LatLng(
+    frame.originLat + (y / frame.latScale),
+    frame.originLng + (x / frame.lngScale)
+  );
+}
+
+function clearGmapPanels(zone) {
+  if (!zone?.gmPanels) {
+    if (zone) zone.gmPanels = [];
+    return;
+  }
+  zone.gmPanels.forEach(panel => panel.setMap(null));
+  zone.gmPanels = [];
+}
+
+function renderGmapPanels(zone, placements, frame) {
+  clearGmapPanels(zone);
+  if (!gmap || !window.google || !placements?.length) return;
+
+  zone.gmPanels = placements.map(panel => {
+    const nw = localMetersToLatLng(frame, panel.x, panel.y);
+    const ne = localMetersToLatLng(frame, panel.x + panel.w, panel.y);
+    const se = localMetersToLatLng(frame, panel.x + panel.w, panel.y + panel.h);
+    const sw = localMetersToLatLng(frame, panel.x, panel.y + panel.h);
+
+    return new google.maps.Polygon({
+      map: gmap,
+      paths: [nw, ne, se, sw],
+      clickable: false,
+      editable: false,
+      strokeColor: '#4FC3F7',
+      strokeOpacity: 0.65,
+      strokeWeight: 1,
+      fillColor: '#16365f',
+      fillOpacity: 0.42,
+      zIndex: 1
+    });
+  });
+}
+
+function rectSamplesInsidePolygon(x, y, w, h, polygonPoints) {
+  const inset = Math.max(0.02, Math.min(w, h) * 0.08);
+  const samples = [
+    { x: x + inset, y: y + inset },
+    { x: x + w / 2, y: y + inset },
+    { x: x + w - inset, y: y + inset },
+    { x: x + inset, y: y + h / 2 },
+    { x: x + w / 2, y: y + h / 2 },
+    { x: x + w - inset, y: y + h / 2 },
+    { x: x + inset, y: y + h - inset },
+    { x: x + w / 2, y: y + h - inset },
+    { x: x + w - inset, y: y + h - inset }
+  ];
+
+  return samples.every(pt => pointInPolygon(pt.x, pt.y, polygonPoints));
+}
+
+function computePanelLayoutInPolygon(polygonPoints, panelWidth, panelHeight, panelSpacing, keepPlacements = false) {
+  if (!polygonPoints || polygonPoints.length < 3) {
+    return { count: 0, placements: [] };
+  }
+
+  const xs = polygonPoints.map(p => p.x);
+  const ys = polygonPoints.map(p => p.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+
+  const orientations = [[panelWidth, panelHeight]];
+  if (Math.abs(panelWidth - panelHeight) > 0.001) {
+    orientations.push([panelHeight, panelWidth]);
+  }
+
+  let bestLayout = { count: 0, placements: [] };
+
+  orientations.forEach(([w, h]) => {
+    const stepX = w + panelSpacing;
+    const stepY = h + panelSpacing;
+    const offsetXs = [0, stepX / 3, (2 * stepX) / 3];
+    const offsetYs = [0, stepY / 3, (2 * stepY) / 3];
+
+    offsetYs.forEach(offsetY => {
+      offsetXs.forEach(offsetX => {
+        let count = 0;
+        const placements = [];
+
+        for (let y = minY + panelSpacing + offsetY; y + h <= maxY - panelSpacing; y += stepY) {
+          for (let x = minX + panelSpacing + offsetX; x + w <= maxX - panelSpacing; x += stepX) {
+            if (rectSamplesInsidePolygon(x, y, w, h, polygonPoints)) {
+              count++;
+              if (keepPlacements) placements.push({ x, y, w, h });
+            }
+          }
+        }
+
+        if (count > bestLayout.count) {
+          bestLayout = { count, placements };
+        }
+      });
+    });
+  });
+
+  return bestLayout;
+}
+
+function countPanelsInPolygonMeters(polygonPoints, panelWidth, panelHeight, panelSpacing) {
+  return computePanelLayoutInPolygon(polygonPoints, panelWidth, panelHeight, panelSpacing, false).count;
+}
+
+// ============================================================
+// GOOGLE MAPS INTEGRATION
+// ============================================================
+function showApiKeyDialog() {
+  document.getElementById('api-dialog').style.display = 'flex';
+}
+function closeApiDialog() {
+  document.getElementById('api-dialog').style.display = 'none';
+}
+
+function loadGoogleMaps() {
+  const key = document.getElementById('gapi-key').value.trim();
+  if (!key) return alert('Please enter an API key.');
+  closeApiDialog();
+
+  if (window.google?.maps) {
+    initGoogleMap();
+    return;
+  }
+
+  const existingScript = document.querySelector('script[data-google-maps-loader="1"]');
+  if (existingScript) return;
+
+  const script = document.createElement('script');
+  script.dataset.googleMapsLoader = '1';
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=geometry&v=weekly&loading=async&callback=initGoogleMap`;
+  script.async = true;
+  script.defer = true;
+  script.onerror = () => alert('Failed to load Google Maps. Check your API key and ensure Maps JavaScript API, Geocoding API, and billing are enabled.');
+  document.head.appendChild(script);
+}
+
+window.initGoogleMap = function() {
+  document.getElementById('demo-map').style.display = 'none';
+  document.getElementById('gmap-container').style.display = 'block';
+  document.getElementById('mode-badge').textContent = '🗺 Google Maps';
+
+  gmap = new google.maps.Map(document.getElementById('gmap-container'), {
+    center: { lat: 48.8566, lng: 2.3522 },
+    zoom: 20,
+    mapTypeId: 'satellite',
+    disableDoubleClickZoom: true,
+    tilt: 0,
+    disableDefaultUI: false,
+    clickableIcons: false,
+    styles: []
+  });
+
+  setupGmapDrawing();
+  syncGmapInteractionState();
+  updateInstructions();
+};
+
+function clearGmapPreview() {
+  if (gmapPreviewPolyline) {
+    gmapPreviewPolyline.setMap(null);
+    gmapPreviewPolyline = null;
+  }
+  gmapPreviewLatLng = null;
+}
+
+function clearGmapStartHandle() {
+  if (gmapStartHandle) {
+    gmapStartHandle.setMap(null);
+    gmapStartHandle = null;
+  }
+}
+
+function cancelGmapDrawing() {
+  gmapDrawingPath = [];
+  clearGmapPreview();
+  clearGmapStartHandle();
+}
+
+function getGmapMetersPerPixel(lat, zoom) {
+  return 156543.03392 * Math.cos((lat * Math.PI) / 180) / Math.pow(2, zoom);
+}
+
+function isNearGmapStartPoint(latLng) {
+  if (!gmap || !window.google || !gmapDrawingPath.length || !latLng) return false;
+
+  const startLatLng = gmapDrawingPath[0];
+  const metersPerPixel = getGmapMetersPerPixel(startLatLng.lat(), gmap.getZoom() || 20);
+  const closeRadiusMeters = Math.max(0.6, metersPerPixel * 18);
+  const distance = google.maps.geometry.spherical.computeDistanceBetween(startLatLng, latLng);
+  return distance <= closeRadiusMeters;
+}
+
+function syncGmapStartHandle() {
+  if (!gmap || !window.google || !gmapDrawingPath.length) {
+    clearGmapStartHandle();
+    return;
+  }
+
+  const startLatLng = gmapDrawingPath[0];
+  const metersPerPixel = getGmapMetersPerPixel(startLatLng.lat(), gmap.getZoom() || 20);
+  const radiusMeters = Math.max(0.6, metersPerPixel * 14);
+  const readyToClose = gmapDrawingPath.length >= 3;
+
+  if (!gmapStartHandle) {
+    gmapStartHandle = new google.maps.Circle({
+      map: gmap,
+      center: startLatLng,
+      radius: radiusMeters,
+      clickable: true,
+      strokeWeight: 3,
+      zIndex: 10000
+    });
+
+    gmapStartHandle.addListener('click', () => {
+      if (currentTool !== 'draw' || gmapDrawingPath.length < 3) return;
+      completeGmapDrawing();
+    });
+  }
+
+  gmapStartHandle.setOptions({
+    center: startLatLng,
+    radius: radiusMeters,
+    fillColor: readyToClose ? '#FFD000' : '#FFFFFF',
+    fillOpacity: readyToClose ? 0.95 : 0.85,
+    strokeColor: readyToClose ? '#00E676' : '#FFD000',
+    strokeOpacity: 1
+  });
+}
+
+function ensureGmapPreview() {
+  if (!gmap || gmapPreviewPolyline) return;
+
+  gmapPreviewPolyline = new google.maps.Polyline({
+    map: gmap,
+    path: [],
+    strokeColor: '#FFD000',
+    strokeWeight: 2,
+    clickable: false,
+    zIndex: 9999
+  });
+}
+
+function refreshGmapPreview() {
+  if (!gmap) return;
+
+  if (!gmapDrawingPath.length) {
+    clearGmapPreview();
+    clearGmapStartHandle();
+    return;
+  }
+
+  ensureGmapPreview();
+  syncGmapStartHandle();
+
+  const previewPath = [...gmapDrawingPath];
+  if (gmapPreviewLatLng) previewPath.push(gmapPreviewLatLng);
+  gmapPreviewPolyline.setPath(previewPath);
+}
+
+function syncGmapSelection() {
+  Object.values(gmapPolygons).forEach(poly => {
+    poly.setOptions({
+      editable: false,
+      strokeWeight: 2,
+      strokeColor: '#4FC3F7',
+      zIndex: 3
+    });
+  });
+
+  if (selectedZone?.gmPoly) {
+    selectedZone.gmPoly.setOptions({
+      editable: currentTool === 'select',
+      strokeWeight: 4,
+      strokeColor: '#FFD000',
+      zIndex: 4
+    });
+  }
+}
+
+function syncGmapInteractionState() {
+  if (!gmap) return;
+
+  gmap.setOptions({
+    draggableCursor: currentTool === 'draw' ? 'crosshair' : currentTool === 'pan' ? 'grab' : undefined,
+    draggingCursor: currentTool === 'pan' ? 'grabbing' : undefined,
+    disableDoubleClickZoom: currentTool === 'draw'
+  });
+
+  syncGmapSelection();
+}
+
+function createGmapPolygon(path) {
+  if (!gmap || !window.google || !path || path.length < 3) return null;
+
+  const poly = new google.maps.Polygon({
+    map: gmap,
+    paths: path,
+    fillColor: activeColor,
+    fillOpacity: 0.35,
+    strokeColor: '#4FC3F7',
+    strokeWeight: 2,
+    editable: false,
+    clickable: true,
+    zIndex: 3
+  });
+
+  const zone = {
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    name: `Zone ${zones.length + 1}`,
+    color: activeColor,
+    gmPoly: poly,
+    gmPanels: [],
+    area: 0,
+    panelCount: 0
+  };
+
+  zones.push(zone);
+  gmapPolygons[zone.id] = poly;
+  attachPolygonEvents(zone);
+  selectedZone = zone;
+  updateGmapZone(zone);
+  syncGmapSelection();
+  renderZonesList();
+  updateStats();
+  return zone;
+}
+
+function completeGmapDrawing(finalLatLng = null) {
+  if (currentTool !== 'draw') return;
+
+  const finalPath = [...gmapDrawingPath];
+  if (finalLatLng) {
+    const lastPoint = finalPath[finalPath.length - 1];
+    const sameAsLast = lastPoint && google.maps.geometry.spherical.computeDistanceBetween(lastPoint, finalLatLng) < 0.05;
+    if (!sameAsLast) finalPath.push(finalLatLng);
+  }
+
+  if (finalPath.length >= 3) createGmapPolygon(finalPath);
+  cancelGmapDrawing();
+}
+
+function setupGmapDrawing() {
+  if (!gmap || !window.google) return;
+
+  gmap.addListener('click', (e) => {
+    if (currentTool !== 'draw') return;
+
+    if (gmapDrawingPath.length >= 3 && isNearGmapStartPoint(e.latLng)) {
+      completeGmapDrawing();
+      return;
+    }
+
+    gmapDrawingPath.push(e.latLng);
+    gmapPreviewLatLng = null;
+    refreshGmapPreview();
+  });
+
+  gmap.addListener('mousemove', (e) => {
+    if (currentTool !== 'draw' || !gmapDrawingPath.length) return;
+
+    gmapPreviewLatLng = e.latLng;
+    refreshGmapPreview();
+  });
+
+  gmap.addListener('dblclick', (e) => {
+    if (currentTool !== 'draw') return;
+    completeGmapDrawing(e.latLng);
+  });
+
+  gmap.addListener('rightclick', (e) => {
+    if (currentTool !== 'draw') return;
+
+    if (gmapDrawingPath.length >= 3) completeGmapDrawing(e.latLng);
+    else cancelGmapDrawing();
+  });
+
+  gmap.addListener('zoom_changed', () => {
+    if (currentTool === 'draw' && gmapDrawingPath.length) syncGmapStartHandle();
+  });
+}
+
+function attachPolygonEvents(zone) {
+  const poly = zone.gmPoly;
+
+  poly.addListener('click', () => {
+    if (currentTool === 'draw') return;
+
+    if (currentTool === 'erase') {
+      deleteZone(zone);
+      return;
+    }
+
+    if (currentTool === 'select') {
+      selectedZone = zone;
+      syncGmapSelection();
+      renderZonesList();
+      updateStats();
+    }
+  });
+
+  const path = poly.getPath();
+  ['set_at', 'insert_at', 'remove_at'].forEach(evt => {
+    path.addListener(evt, () => {
+      updateGmapZone(zone);
+      updateStats();
+    });
+  });
+}
+
+function updateGmapZone(zone) {
+  if (!zone.gmPoly || !window.google) return;
+
+  const path = zone.gmPoly.getPath();
+  const frame = getLatLngLocalFrame(path);
+  const localPolygon = frame.points;
+
+  zone.area = Math.abs(polygonArea(localPolygon));
+
+  const panelWidth = parseFloat(document.getElementById('panel-width').value) || 1.0;
+  const panelHeight = parseFloat(document.getElementById('panel-height').value) || 1.7;
+  const panelSpacing = parseFloat(document.getElementById('panel-spacing').value) || 0.05;
+
+  const layout = computePanelLayoutInPolygon(localPolygon, panelWidth, panelHeight, panelSpacing, true);
+  zone.panelCount = layout.count;
+  zone.panelLayout = layout;
+  renderGmapPanels(zone, layout.placements, frame);
+}
+function searchAddress() {
+  const addr = document.getElementById('address-input').value.trim();
+  if (!addr) return;
+
+  if (gmap && window.google) {
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode({ address: addr }, (results, status) => {
+      if (status === 'OK') {
+        gmap.setCenter(results[0].geometry.location);
+        gmap.setZoom(20);
+      } else {
+        alert('Address not found: ' + status);
+      }
+    });
+  } else {
+    // Demo mode – just show a message
+    document.getElementById('instructions').innerHTML = `<b>Demo Mode:</b> "${addr}" — Connect Google Maps for real satellite imagery`;
+  }
+}
+
+// ============================================================
+// EXPORT
+// ============================================================
+function exportReport() {
+  const watts = parseFloat(document.getElementById('panel-watts').value) || 400;
+  const totalPanels = zones.reduce((a, z) => a + z.panelCount, 0);
+  const kwp = (totalPanels * watts / 1000).toFixed(2);
+  const totalArea = zones.reduce((a, z) => a + z.area, 0).toFixed(1);
+  const annualKwh = Math.round(kwp * 1100);
+
+  const lines = [
+    'SOLARSKI — Solar Roof Planning Report',
+    '='.repeat(40),
+    `Generated: ${new Date().toLocaleString()}`,
+    '',
+    'SYSTEM SUMMARY',
+    '-'.repeat(30),
+    `Total Panels:    ${totalPanels}`,
+    `System Size:     ${kwp} kWp`,
+    `Total Roof Area: ${totalArea} m²`,
+    `Est. Annual:     ${annualKwh.toLocaleString()} kWh`,
+    '',
+    'ZONES',
+    '-'.repeat(30),
+    ...zones.map(z =>
+      `${z.name}: ${z.panelCount} panels, ${z.area.toFixed(1)} m², ${(z.panelCount * watts / 1000).toFixed(2)} kWp`
+    ),
+    '',
+    'NOTE: Annual kWh estimate based on 1100 peak sun hours/year.',
+    'Consult a certified installer for site-specific assessment.'
+  ];
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'solar-report.txt';
+  a.click();
+}
+
+// ============================================================
+// KEYBOARD SHORTCUTS
+// ============================================================
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'd' || e.key === 'D') setTool('draw');
+  if (e.key === 's' || e.key === 'S') setTool('select');
+  if (e.key === 'e' || e.key === 'E') setTool('erase');
+  if (e.key === 'Escape') {
+    cancelDraw();
+    cancelGmapDrawing();
+    setTool('select');
+  }
+  if (e.key === 'Delete' && selectedZone) deleteZone(selectedZone);
+  if (e.key === 'Enter') {
+    if (isDrawing && drawPoints.length >= 3) closeZone();
+    if (gmap && currentTool === 'draw' && gmapDrawingPath.length >= 3) completeGmapDrawing();
+  }
+});
+</script>
+</body>
+</html>
