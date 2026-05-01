@@ -7,7 +7,9 @@ Draw roof zones on satellite imagery and estimate how many solar panels fit in r
 - Draw editable roof polygons on Google Maps satellite view
 - Close a zone by clicking near the start point
 - Live panel-fit recalculation as zones or panel settings change
-- Visual placement of panel rectangles inside each zone
+- Visual placement of rotated panel rectangles inside each zone
+- Manual panel-angle control plus Auto Angle from the selected roof edge
+- Extra on-map zoom controls for more precise phone use
 - Responsive mobile layout with slide-in / hideable side menu
 - Demo mode included when Google Maps is not connected
 - Export a simple planning report

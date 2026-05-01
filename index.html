@@ -423,6 +423,55 @@
     margin-top: 8px;
   }
 
+  .config-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .config-actions .btn {
+    flex: 1;
+    padding: 8px 10px;
+  }
+
+  .map-zoom-controls {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    z-index: 12;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .zoom-btn {
+    width: 52px;
+    min-height: 44px;
+    padding: 0 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,208,0,0.22);
+    background: rgba(17,24,39,0.92);
+    color: var(--text);
+    backdrop-filter: blur(8px);
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+  }
+
+  .zoom-btn:hover {
+    border-color: rgba(255,208,0,0.45);
+    color: var(--sun);
+  }
+
+  .zoom-btn.precision {
+    width: auto;
+    min-width: 52px;
+    font-size: 12px;
+    padding: 0 12px;
+  }
+
   .no-zones {
     text-align: center;
     color: var(--text-dim);
@@ -532,6 +581,23 @@
       padding: 10px 14px;
       font-size: 11px;
     }
+
+    .map-zoom-controls {
+      right: 12px;
+      bottom: 12px;
+      gap: 6px;
+    }
+
+    .zoom-btn {
+      width: 58px;
+      min-height: 48px;
+      font-size: 24px;
+    }
+
+    .zoom-btn.precision {
+      font-size: 11px;
+      min-width: 58px;
+    }
   }
 
   @media (max-width: 560px) {
@@ -637,8 +703,16 @@
         <span class="config-label">Scale (m/px)</span>
         <input class="config-value" type="number" id="map-scale" value="0.15" step="0.01" min="0.01" max="5" oninput="updateStats()">
       </div>
+      <div class="config-row">
+        <span class="config-label">Panel angle (°)</span>
+        <input class="config-value" type="number" id="panel-angle" value="0" step="1" min="-180" max="180" oninput="updateStats()">
+      </div>
+      <div class="config-actions">
+        <button class="btn btn-ghost" onclick="autoAlignPanels()">Auto Angle</button>
+        <button class="btn btn-ghost" onclick="resetPanelAngle()">Reset</button>
+      </div>
 
-      <div style="margin-top:4px;">
+      <div style="margin-top:12px;">
         <div style="font-size:11px; color:var(--text-dim); margin-bottom:6px;">Zone Color</div>
         <div class="color-row" id="color-picker">
           <div class="color-swatch selected" style="background:#1A3A5C;" data-color="#1A3A5C" onclick="selectColor(this)"></div>
@@ -697,6 +771,12 @@
     <!-- Instructions -->
     <div class="instructions" id="instructions">
       <b>✏ Draw mode:</b> Click to add points, double-click to close zone &nbsp;|&nbsp; <b>🖱 Select:</b> Click zone to select
+    </div>
+
+    <div class="map-zoom-controls" aria-label="Map zoom controls">
+      <button class="zoom-btn" onclick="zoomMap(1)" title="Zoom in">＋</button>
+      <button class="zoom-btn" onclick="zoomMap(-1)" title="Zoom out">－</button>
+      <button class="zoom-btn precision" onclick="zoomMap(2)" title="Extra zoom for precise roof drawing">Roof +</button>
     </div>
   </div>
 </div>
@@ -987,6 +1067,18 @@ function drawZone(zone, selected) {
   c.fillText(`${zone.name} (${zone.panelCount}p)`, cx, cy);
 }
 
+function getPanelAngleDegrees() {
+  const value = parseFloat(document.getElementById('panel-angle')?.value);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function normalizePanelAngle(angleDeg) {
+  let normalized = angleDeg % 180;
+  if (normalized <= -90) normalized += 180;
+  if (normalized > 90) normalized -= 180;
+  return normalized;
+}
+
 function drawPanelsInZone(zone) {
   if (!Array.isArray(zone.points) || zone.points.length < 3) return;
   const c = ctx2d;
@@ -995,10 +1087,10 @@ function drawPanelsInZone(zone) {
   const pw = parseFloat(document.getElementById('panel-width').value) / scale;
   const ph = parseFloat(document.getElementById('panel-height').value) / scale;
   const gap = parseFloat(document.getElementById('panel-spacing').value) / scale;
-  const layout = computePanelLayoutInPolygon(zone.points, pw, ph, gap, true);
+  const layout = computePanelLayoutInPolygon(zone.points, pw, ph, gap, true, getPanelAngleDegrees());
 
   layout.placements.forEach(panel => {
-    drawPanel(c, panel.x, panel.y, panel.w, panel.h, zone.color);
+    drawPanel(c, panel, zone.color);
   });
 
   zone.panelCount = layout.count;
@@ -1007,38 +1099,81 @@ function drawPanelsInZone(zone) {
   zone.area = Math.abs(polygonArea(zone.points)) * scale * scale;
 }
 
-function drawPanel(c, x, y, w, h, baseColor) {
-  // Panel body
-  const grad = c.createLinearGradient(x, y, x+w, y+h);
+function drawPanel(c, panel, baseColor) {
+  const corners = panel?.corners;
+  if (!corners?.length) return;
+
+  c.save();
+  c.beginPath();
+  c.moveTo(corners[0].x, corners[0].y);
+  corners.slice(1).forEach(pt => c.lineTo(pt.x, pt.y));
+  c.closePath();
+  c.clip();
+
+  const xs = corners.map(pt => pt.x);
+  const ys = corners.map(pt => pt.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+
+  const grad = c.createLinearGradient(minX, minY, maxX, maxY);
   grad.addColorStop(0, '#1a3d6e');
   grad.addColorStop(0.5, '#0f2a4e');
   grad.addColorStop(1, '#162f5c');
   c.fillStyle = grad;
-  c.fillRect(x, y, w, h);
+  c.fillRect(minX, minY, Math.max(1, maxX - minX), Math.max(1, maxY - minY));
 
-  // Grid lines
+  const origin = panel.origin || corners[0];
+  const ux = panel.ux || { x: 1, y: 0 };
+  const uy = panel.uy || { x: 0, y: 1 };
+  const w = panel.w || Math.hypot(corners[1].x - corners[0].x, corners[1].y - corners[0].y);
+  const h = panel.h || Math.hypot(corners[3].x - corners[0].x, corners[3].y - corners[0].y);
+
   c.strokeStyle = 'rgba(79,195,247,0.35)';
   c.lineWidth = 0.5;
 
-  // Vertical cell divisions (3 cells wide)
   for (let i = 1; i < 3; i++) {
-    const lx = x + (w * i / 3);
-    c.beginPath(); c.moveTo(lx, y); c.lineTo(lx, y+h); c.stroke();
-  }
-  // Horizontal cell divisions (4 cells tall)
-  for (let i = 1; i < 4; i++) {
-    const ly = y + (h * i / 4);
-    c.beginPath(); c.moveTo(x, ly); c.lineTo(x+w, ly); c.stroke();
+    const t = w * i / 3;
+    c.beginPath();
+    c.moveTo(origin.x + ux.x * t, origin.y + ux.y * t);
+    c.lineTo(origin.x + ux.x * t + uy.x * h, origin.y + ux.y * t + uy.y * h);
+    c.stroke();
   }
 
-  // Outer border
+  for (let i = 1; i < 4; i++) {
+    const t = h * i / 4;
+    c.beginPath();
+    c.moveTo(origin.x + uy.x * t, origin.y + uy.y * t);
+    c.lineTo(origin.x + uy.x * t + ux.x * w, origin.y + uy.y * t + ux.y * w);
+    c.stroke();
+  }
+
+  c.restore();
+
+  c.beginPath();
+  c.moveTo(corners[0].x, corners[0].y);
+  corners.slice(1).forEach(pt => c.lineTo(pt.x, pt.y));
+  c.closePath();
   c.strokeStyle = 'rgba(79,195,247,0.7)';
   c.lineWidth = 0.8;
-  c.strokeRect(x, y, w, h);
+  c.stroke();
 
-  // Tiny shine highlight
+  c.save();
+  c.beginPath();
+  c.moveTo(corners[0].x, corners[0].y);
+  corners.slice(1).forEach(pt => c.lineTo(pt.x, pt.y));
+  c.closePath();
+  c.clip();
   c.fillStyle = 'rgba(255,255,255,0.06)';
-  c.fillRect(x+1, y+1, w*0.4, h*0.3);
+  c.beginPath();
+  const shineEndX = origin.x + ux.x * (w * 0.42) + uy.x * (h * 0.28);
+  const shineEndY = origin.y + ux.y * (w * 0.42) + uy.y * (h * 0.28);
+  c.moveTo(origin.x + ux.x + uy.x, origin.y + ux.y + uy.y);
+  c.lineTo(shineEndX, shineEndY);
+  c.lineTo(shineEndX - uy.x * (h * 0.16), shineEndY - uy.y * (h * 0.16));
+  c.lineTo(origin.x + uy.x * (h * 0.16), origin.y + uy.y * (h * 0.16));
+  c.closePath();
+  c.fill();
+  c.restore();
 }
 
 function drawInProgress() {
@@ -1305,7 +1440,7 @@ function setTool(tool) {
 
 function updateInstructions() {
   const msgs = {
-    draw: '<b>✏ Draw:</b> Click to add corners · click back near the yellow start point to close · double-click / right-click / Enter also finish · Esc cancels',
+    draw: '<b>✏ Draw:</b> Click corners · click back near the yellow start point to close · use Roof+ / + zoom buttons on phones for precision · Esc cancels',
     select: '<b>🖱 Select:</b> Click a zone · Right-click for options',
     pan: '<b>✋ Pan:</b> Click and drag to pan the map',
     erase: '<b>🗑 Erase:</b> Click a zone to delete it'
@@ -1317,6 +1452,38 @@ function selectColor(el) {
   document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
   el.classList.add('selected');
   activeColor = el.dataset.color;
+}
+
+function autoAlignPanels() {
+  const referenceZone = selectedZone || zones.find(z => z?.gmPoly || Array.isArray(z?.points));
+  if (!referenceZone) {
+    alert('Select or draw a zone first so the app can infer the roof direction.');
+    return;
+  }
+
+  const suggested = getZoneSuggestedAngle(referenceZone);
+  document.getElementById('panel-angle').value = suggested.toFixed(1);
+  updateStats();
+}
+
+function resetPanelAngle() {
+  document.getElementById('panel-angle').value = 0;
+  updateStats();
+}
+
+function zoomMap(step) {
+  if (gmap && window.google) {
+    const currentZoom = gmap.getZoom() || 20;
+    gmap.setZoom(currentZoom + step);
+    return;
+  }
+
+  const scaleInput = document.getElementById('map-scale');
+  const currentScale = parseFloat(scaleInput.value) || 0.15;
+  const factor = step > 0 ? Math.pow(0.82, step) : Math.pow(1 / 0.82, Math.abs(step));
+  const nextScale = Math.min(5, Math.max(0.01, currentScale * factor));
+  scaleInput.value = nextScale.toFixed(3);
+  updateStats();
 }
 
 // ============================================================
@@ -1401,14 +1568,12 @@ function renderGmapPanels(zone, placements, frame) {
   if (!gmap || !window.google || !placements?.length) return;
 
   zone.gmPanels = placements.map(panel => {
-    const nw = localMetersToLatLng(frame, panel.x, panel.y);
-    const ne = localMetersToLatLng(frame, panel.x + panel.w, panel.y);
-    const se = localMetersToLatLng(frame, panel.x + panel.w, panel.y + panel.h);
-    const sw = localMetersToLatLng(frame, panel.x, panel.y + panel.h);
+    const panelPath = (panel.corners || []).map(pt => localMetersToLatLng(frame, pt.x, pt.y));
+    if (!panelPath.length) return null;
 
     return new google.maps.Polygon({
       map: gmap,
-      paths: [nw, ne, se, sw],
+      paths: panelPath,
       clickable: false,
       editable: false,
       strokeColor: '#4FC3F7',
@@ -1418,7 +1583,16 @@ function renderGmapPanels(zone, placements, frame) {
       fillOpacity: 0.42,
       zIndex: 1
     });
-  });
+  }).filter(Boolean);
+}
+
+function rotatePoint(point, angleRad) {
+  const cos = Math.cos(angleRad);
+  const sin = Math.sin(angleRad);
+  return {
+    x: point.x * cos - point.y * sin,
+    y: point.x * sin + point.y * cos
+  };
 }
 
 function rectSamplesInsidePolygon(x, y, w, h, polygonPoints) {
@@ -1438,13 +1612,80 @@ function rectSamplesInsidePolygon(x, y, w, h, polygonPoints) {
   return samples.every(pt => pointInPolygon(pt.x, pt.y, polygonPoints));
 }
 
-function computePanelLayoutInPolygon(polygonPoints, panelWidth, panelHeight, panelSpacing, keepPlacements = false) {
-  if (!polygonPoints || polygonPoints.length < 3) {
-    return { count: 0, placements: [] };
+function buildPlacement(x, y, w, h, angleRad) {
+  const localCorners = [
+    { x, y },
+    { x: x + w, y },
+    { x: x + w, y: y + h },
+    { x, y: y + h }
+  ];
+  const corners = localCorners.map(pt => rotatePoint(pt, angleRad));
+  const origin = corners[0];
+  const ux = {
+    x: corners[1].x - corners[0].x,
+    y: corners[1].y - corners[0].y
+  };
+  const uy = {
+    x: corners[3].x - corners[0].x,
+    y: corners[3].y - corners[0].y
+  };
+  const uxLen = Math.hypot(ux.x, ux.y) || 1;
+  const uyLen = Math.hypot(uy.x, uy.y) || 1;
+
+  return {
+    x,
+    y,
+    w,
+    h,
+    angleRad,
+    origin,
+    ux: { x: ux.x / uxLen, y: ux.y / uxLen },
+    uy: { x: uy.x / uyLen, y: uy.y / uyLen },
+    corners
+  };
+}
+
+function getZoneSuggestedAngle(zone) {
+  let points = [];
+
+  if (zone?.gmPoly && typeof zone.gmPoly.getPath === 'function') {
+    points = getLatLngLocalFrame(zone.gmPoly.getPath()).points;
+  } else if (Array.isArray(zone?.points)) {
+    points = zone.points;
   }
 
-  const xs = polygonPoints.map(p => p.x);
-  const ys = polygonPoints.map(p => p.y);
+  if (!points || points.length < 2) return 0;
+
+  let bestAngle = 0;
+  let bestLength = 0;
+
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+
+    if (len > bestLength) {
+      bestLength = len;
+      bestAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+    }
+  }
+
+  return normalizePanelAngle(bestAngle);
+}
+
+function computePanelLayoutInPolygon(polygonPoints, panelWidth, panelHeight, panelSpacing, keepPlacements = false, angleDeg = 0) {
+  if (!polygonPoints || polygonPoints.length < 3) {
+    return { count: 0, placements: [], angleDeg: normalizePanelAngle(angleDeg) };
+  }
+
+  const normalizedAngleDeg = normalizePanelAngle(angleDeg);
+  const angleRad = normalizedAngleDeg * Math.PI / 180;
+  const rotatedPolygon = polygonPoints.map(pt => rotatePoint(pt, -angleRad));
+
+  const xs = rotatedPolygon.map(p => p.x);
+  const ys = rotatedPolygon.map(p => p.y);
   const minX = Math.min(...xs), maxX = Math.max(...xs);
   const minY = Math.min(...ys), maxY = Math.max(...ys);
 
@@ -1453,7 +1694,7 @@ function computePanelLayoutInPolygon(polygonPoints, panelWidth, panelHeight, pan
     orientations.push([panelHeight, panelWidth]);
   }
 
-  let bestLayout = { count: 0, placements: [] };
+  let bestLayout = { count: 0, placements: [], angleDeg: normalizedAngleDeg };
 
   orientations.forEach(([w, h]) => {
     const stepX = w + panelSpacing;
@@ -1468,15 +1709,15 @@ function computePanelLayoutInPolygon(polygonPoints, panelWidth, panelHeight, pan
 
         for (let y = minY + panelSpacing + offsetY; y + h <= maxY - panelSpacing; y += stepY) {
           for (let x = minX + panelSpacing + offsetX; x + w <= maxX - panelSpacing; x += stepX) {
-            if (rectSamplesInsidePolygon(x, y, w, h, polygonPoints)) {
+            if (rectSamplesInsidePolygon(x, y, w, h, rotatedPolygon)) {
               count++;
-              if (keepPlacements) placements.push({ x, y, w, h });
+              if (keepPlacements) placements.push(buildPlacement(x, y, w, h, angleRad));
             }
           }
         }
 
         if (count > bestLayout.count) {
-          bestLayout = { count, placements };
+          bestLayout = { count, placements, angleDeg: normalizedAngleDeg };
         }
       });
     });
@@ -1485,8 +1726,8 @@ function computePanelLayoutInPolygon(polygonPoints, panelWidth, panelHeight, pan
   return bestLayout;
 }
 
-function countPanelsInPolygonMeters(polygonPoints, panelWidth, panelHeight, panelSpacing) {
-  return computePanelLayoutInPolygon(polygonPoints, panelWidth, panelHeight, panelSpacing, false).count;
+function countPanelsInPolygonMeters(polygonPoints, panelWidth, panelHeight, panelSpacing, angleDeg = 0) {
+  return computePanelLayoutInPolygon(polygonPoints, panelWidth, panelHeight, panelSpacing, false, angleDeg).count;
 }
 
 // ============================================================
@@ -1535,6 +1776,8 @@ window.initGoogleMap = function() {
     tilt: 0,
     disableDefaultUI: false,
     clickableIcons: false,
+    gestureHandling: 'greedy',
+    zoomControl: true,
     styles: []
   });
 
@@ -1807,8 +2050,9 @@ function updateGmapZone(zone) {
   const panelWidth = parseFloat(document.getElementById('panel-width').value) || 1.0;
   const panelHeight = parseFloat(document.getElementById('panel-height').value) || 1.7;
   const panelSpacing = parseFloat(document.getElementById('panel-spacing').value) || 0.05;
+  const panelAngle = getPanelAngleDegrees();
 
-  const layout = computePanelLayoutInPolygon(localPolygon, panelWidth, panelHeight, panelSpacing, true);
+  const layout = computePanelLayoutInPolygon(localPolygon, panelWidth, panelHeight, panelSpacing, true, panelAngle);
   zone.panelCount = layout.count;
   zone.panelLayout = layout;
   renderGmapPanels(zone, layout.placements, frame);
