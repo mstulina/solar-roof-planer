@@ -10,6 +10,7 @@ Improve the app without breaking the current working flows:
 - select and edit zones
 - estimate solar panel fit
 - show panel rectangles on aerial imagery
+- keep Croatian projects tied to a confirmed cadastral parcel
 - keep the app usable on phones
 
 ## Project shape
@@ -23,6 +24,8 @@ Improve the app without breaking the current working flows:
 ## Current map stack
 
 - The app uses OpenLayers from a CDN.
+- The app registers EPSG:3765 with `proj4` for Croatian DGU/uredjenazemlja services.
+- The app is currently Croatia-only for search and parcel workflows.
 - Do not reintroduce Google Maps or the deprecated Google Maps Drawing Library.
 - Do not add `libraries=drawing`.
 - Do not use `google.maps.drawing.DrawingManager`.
@@ -36,6 +39,8 @@ Improve the app without breaking the current working flows:
 4. Update both the panel count and visible panel overlays after geometry or setting changes.
 5. Keep mobile usability intact.
 6. Confirm map resize after sidebar toggles with `notifyMapResize()`.
+7. Keep parcel selection explicit: fetched parcel data must be confirmed in the modal before becoming `selectedParcel`.
+8. Do not make slow WFS parcel lookup mandatory; preserve the map settings toggle.
 
 ## Working assumptions about the code
 
@@ -46,6 +51,9 @@ Improve the app without breaking the current working flows:
 - Each zone owns a `settings` object for panel width, height, watts, spacing, angle, and Vmp.
 - `defaultZoneSettings` is copied into newly drawn zones; sidebar edits apply to `selectedZone.settings` when a zone is selected.
 - `maxStringVmp` is a global string-planning setting and defaults to 800 V.
+- `selectedParcel` is the confirmed cadastral parcel for the project.
+- `pendingParcel` is a fetched parcel awaiting modal confirmation.
+- `parcelValid` / `parcelMessage` on each zone describe whether it fits inside `selectedParcel`.
 - `updateStats()` is the main refresh path after most state changes.
 - `computePanelLayoutInPolygon(...)` is the panel-fit engine.
 
@@ -64,6 +72,15 @@ Improve the app without breaking the current working flows:
 - Test erase mode.
 - Make sure draw mode does not interfere with select, erase, or pan.
 - Avoid invisible zero-area zones.
+- Confirm zone parcel-validity updates after drawing or editing when a parcel is selected.
+
+## When changing cadastral behavior
+
+- Keep base layer, cadastral overlays, and parcel lookup controls in the map settings gear.
+- Keep parcel lookup optional because the official WFS can be slow.
+- Show fetched parcel details in the blocking modal and require confirmation before updating `selectedParcel`.
+- Do not silently replace the selected parcel from pan/zoom.
+- Use the selected parcel only as a planning/legal aid; do not present it as authoritative engineering/legal advice.
 
 ## When changing panel fitting
 
@@ -84,6 +101,11 @@ Improve the app without breaking the current working flows:
 
 - App loads from `python -m http.server 8000`.
 - DGU, Esri, and OSM imagery can be selected.
+- Map settings gear opens and contains base layer, cadastral overlays, and parcel lookup.
+- Cadastral parcel overlay can be shown over imagery.
+- Parcel lookup can be toggled off.
+- Clicking/searching a parcel opens a blocking confirmation modal.
+- Confirmed parcel info appears and export blocks zones outside that parcel.
 - Draw a zone.
 - Select and edit it.
 - Delete it.
@@ -92,6 +114,7 @@ Improve the app without breaking the current working flows:
 - Confirm global max string Vmp updates string recommendations without changing zone panel settings.
 - Confirm panel count and visible overlays update.
 - Search an address and coordinates.
+- Search results and coordinates are limited to Croatia.
 - Export a report.
 - Desktop sidebar hide/show works.
 - Mobile slide-over menu opens and closes.
@@ -131,6 +154,8 @@ python -m venv .venv
 - forgetting to clear old panel overlay features
 - changing sidebar layout without resizing the map afterward
 - adding unpublished keys or secrets to the repo
+- bypassing the parcel confirmation modal
+- making WFS lookup run on every pan or zoom
 
 ## Handoff expectation
 
