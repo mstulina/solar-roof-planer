@@ -107,6 +107,27 @@ python -m http.server 8000
 
 Then open `http://localhost:8000`.
 
+## Automated tests
+
+The project now has a small Python/Playwright test harness:
+
+```bash
+python -m venv .venv
+.\.venv\Scripts\python -m pip install -r requirements.txt
+.\.venv\Scripts\python -m playwright install chromium
+.\.venv\Scripts\python -m pytest
+```
+
+The current baseline passes 5 tests. They cover:
+
+- app boot without Google Maps
+- panel layout determinism in the browser context
+- programmatic zone creation, stats, and panel overlays
+- screenshot nonblank scan for OpenStreetMap
+- screenshot nonblank scan after zone/panel rendering
+
+Screenshot artifacts are written to `test-artifacts/` and intentionally ignored by Git.
+
 ## Manual regression checklist
 
 Run through these before handoff when possible:

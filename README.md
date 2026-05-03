@@ -24,6 +24,24 @@ python -m http.server 8000
 
 Then open `http://localhost:8000`.
 
+## Test
+
+Create the local test environment:
+
+```bash
+python -m venv .venv
+.\.venv\Scripts\python -m pip install -r requirements.txt
+.\.venv\Scripts\python -m playwright install chromium
+```
+
+Run the browser and geometry smoke suite:
+
+```bash
+.\.venv\Scripts\python -m pytest
+```
+
+The suite starts a local static server, verifies the app boots without Google Maps, checks the panel layout engine in the browser context, creates a zone programmatically, and saves screenshot smoke artifacts under `test-artifacts/`.
+
 ## Map sources
 
 The app does not require a Google Maps API key.

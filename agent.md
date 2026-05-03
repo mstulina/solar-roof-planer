@@ -89,6 +89,22 @@ Improve the app without breaking the current working flows:
 - Desktop sidebar hide/show works.
 - Mobile slide-over menu opens and closes.
 
+## Automated regression checklist
+
+Run before handoff when changing map, drawing, panel layout, or layout behavior:
+
+```bash
+.\.venv\Scripts\python -m pytest
+```
+
+If `.venv` does not exist, create it and install:
+
+```bash
+python -m venv .venv
+.\.venv\Scripts\python -m pip install -r requirements.txt
+.\.venv\Scripts\python -m playwright install chromium
+```
+
 ## Good next tasks
 
 - save/load project state as JSON
