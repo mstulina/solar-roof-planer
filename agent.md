@@ -91,11 +91,13 @@ Improve the app without breaking the current working flows:
 
 ## Automated regression checklist
 
-Run before handoff when changing map, drawing, panel layout, or layout behavior:
+Run after every code or behavior change before committing. This is the stability gate for the project, especially when changing map, drawing, panel layout, imagery, search, export, or responsive layout behavior:
 
 ```bash
 .\.venv\Scripts\python -m pytest
 ```
+
+Do not commit a code change until the suite passes, unless the handoff explicitly documents the failure and why it is currently unavoidable.
 
 If `.venv` does not exist, create it and install:
 
