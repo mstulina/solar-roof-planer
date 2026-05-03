@@ -119,7 +119,8 @@ def test_programmatic_zone_updates_stats_and_panel_overlays(page):
               zones: zones.length,
               panels: panelSource.getFeatures().length,
               statPanels: Number(document.getElementById('stat-panels').textContent),
-              area: zones[0].area
+              area: zones[0].area,
+              settings: zones[0].settings
             };
         }"""
     )
@@ -128,6 +129,123 @@ def test_programmatic_zone_updates_stats_and_panel_overlays(page):
     assert result["panels"] > 0
     assert result["statPanels"] == result["panels"]
     assert result["area"] > 0
+    assert result["settings"]["panelAngle"] == 0
+    assert result["settings"]["panelVmp"] == 42
+
+
+def test_zone_settings_are_independent_and_loaded_on_selection(page):
+    page, _ = page
+
+    result = page.evaluate(
+        """() => {
+            function addZone(offsetLon) {
+              const center = map.getView().getCenter();
+              const lonLat = ol.proj.toLonLat(center);
+              const dx = 0.00014;
+              const dy = 0.00004;
+              const ring = [
+                [lonLat[0] + offsetLon - dx, lonLat[1] - dy],
+                [lonLat[0] + offsetLon + dx, lonLat[1] - dy],
+                [lonLat[0] + offsetLon + dx, lonLat[1] + dy],
+                [lonLat[0] + offsetLon - dx, lonLat[1] + dy],
+                [lonLat[0] + offsetLon - dx, lonLat[1] - dy]
+              ].map(coord => ol.proj.fromLonLat(coord));
+              const feature = new ol.Feature(new ol.geom.Polygon([ring]));
+              zoneSource.addFeature(feature);
+              createZoneFromFeature(feature);
+              return zones[zones.length - 1];
+            }
+
+            const first = addZone(-0.00025);
+            document.getElementById('panel-angle').value = '0';
+            document.getElementById('panel-watts').value = '400';
+            document.getElementById('panel-vmp').value = '40';
+            onSettingsInput();
+
+            const second = addZone(0.00025);
+            document.getElementById('panel-angle').value = '45';
+            document.getElementById('panel-watts').value = '500';
+            document.getElementById('panel-vmp').value = '50';
+            onSettingsInput();
+
+            const firstCountBefore = first.panelCount;
+            const secondCountBefore = second.panelCount;
+            selectZone(first.id);
+            const loadedFirst = {
+              angle: Number(document.getElementById('panel-angle').value),
+              watts: Number(document.getElementById('panel-watts').value),
+              vmp: Number(document.getElementById('panel-vmp').value)
+            };
+            selectZone(second.id);
+            const loadedSecond = {
+              angle: Number(document.getElementById('panel-angle').value),
+              watts: Number(document.getElementById('panel-watts').value),
+              vmp: Number(document.getElementById('panel-vmp').value)
+            };
+
+            return {
+              firstAngle: first.settings.panelAngle,
+              secondAngle: second.settings.panelAngle,
+              firstCountBefore,
+              secondCountBefore,
+              loadedFirst,
+              loadedSecond,
+              kwp: Number(document.getElementById('stat-kwp').textContent)
+            };
+        }"""
+    )
+
+    assert result["firstAngle"] == 0
+    assert result["secondAngle"] == 45
+    assert result["loadedFirst"] == {"angle": 0, "watts": 400, "vmp": 40}
+    assert result["loadedSecond"] == {"angle": 45, "watts": 500, "vmp": 50}
+    assert result["firstCountBefore"] > 0
+    assert result["secondCountBefore"] > 0
+    expected_kwp = (
+        result["firstCountBefore"] * 400 + result["secondCountBefore"] * 500
+    ) / 1000
+    assert abs(result["kwp"] - expected_kwp) < 0.051
+
+
+def test_string_recommendation_uses_global_voltage_and_panel_vmp(page):
+    page, _ = page
+
+    result = page.evaluate(
+        """() => {
+            const center = map.getView().getCenter();
+            const lonLat = ol.proj.toLonLat(center);
+            const ring = [
+              [lonLat[0] - 0.00012, lonLat[1] - 0.00006],
+              [lonLat[0] + 0.00012, lonLat[1] - 0.00006],
+              [lonLat[0] + 0.00012, lonLat[1] + 0.00006],
+              [lonLat[0] - 0.00012, lonLat[1] + 0.00006],
+              [lonLat[0] - 0.00012, lonLat[1] - 0.00006]
+            ].map(coord => ol.proj.fromLonLat(coord));
+            const feature = new ol.Feature(new ol.geom.Polygon([ring]));
+            zoneSource.addFeature(feature);
+            createZoneFromFeature(feature);
+
+            document.getElementById('panel-vmp').value = '40';
+            onSettingsInput();
+            document.getElementById('max-string-vmp').value = '400';
+            onStringSettingsInput();
+
+            const recommendation = getStringRecommendation(zones[0]);
+            return {
+              panels: zones[0].panelCount,
+              modulesPerString: recommendation.modulesPerString,
+              strings: recommendation.strings,
+              label: recommendation.label,
+              listText: document.getElementById('zones-list').textContent
+            };
+        }"""
+    )
+
+    assert result["panels"] > 0
+    assert result["modulesPerString"] == 10
+    assert result["strings"] == -(-result["panels"] // 10)
+    assert "up to 10 panels/string" in result["label"]
+    assert "up to 10 panels/string" in result["listText"]
 
 
 def test_osm_layer_screenshot_is_not_blank(page):

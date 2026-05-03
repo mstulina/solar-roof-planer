@@ -390,11 +390,13 @@
 
     <section class="sidebar-section">
       <h3>Panel Settings</h3>
-      <div class="config-row"><label>Width (m)</label><input type="number" id="panel-width" value="1.0" step="0.05" min="0.5" max="3" oninput="updateStats()"></div>
-      <div class="config-row"><label>Height (m)</label><input type="number" id="panel-height" value="1.7" step="0.05" min="0.5" max="3" oninput="updateStats()"></div>
-      <div class="config-row"><label>Watts</label><input type="number" id="panel-watts" value="400" step="10" min="100" max="800" oninput="updateStats()"></div>
-      <div class="config-row"><label>Spacing (m)</label><input type="number" id="panel-spacing" value="0.05" step="0.01" min="0" max="0.5" oninput="updateStats()"></div>
-      <div class="config-row"><label>Angle (deg)</label><input type="number" id="panel-angle" value="0" step="1" min="-180" max="180" oninput="updateStats()"></div>
+      <div class="config-row"><label>Width (m)</label><input type="number" id="panel-width" value="1.0" step="0.05" min="0.5" max="3" oninput="onSettingsInput()"></div>
+      <div class="config-row"><label>Height (m)</label><input type="number" id="panel-height" value="1.7" step="0.05" min="0.5" max="3" oninput="onSettingsInput()"></div>
+      <div class="config-row"><label>Watts</label><input type="number" id="panel-watts" value="400" step="10" min="100" max="800" oninput="onSettingsInput()"></div>
+      <div class="config-row"><label>Panel Vmp (V)</label><input type="number" id="panel-vmp" value="42" step="0.1" min="20" max="80" oninput="onSettingsInput()"></div>
+      <div class="config-row"><label>Spacing (m)</label><input type="number" id="panel-spacing" value="0.05" step="0.01" min="0" max="0.5" oninput="onSettingsInput()"></div>
+      <div class="config-row"><label>Angle (deg)</label><input type="number" id="panel-angle" value="0" step="1" min="-180" max="180" oninput="onSettingsInput()"></div>
+      <div class="config-row"><label>Max string Vmp (V)</label><input type="number" id="max-string-vmp" value="800" step="10" min="100" max="1500" oninput="onStringSettingsInput()"></div>
     </section>
 
     <section class="sidebar-section">
@@ -435,6 +437,15 @@
 <script>
 const EARTH_RADIUS = 6378137;
 const ZONE_COLORS = ['#FFD000', '#4FC3F7', '#00D66F', '#FF7A59', '#B388FF', '#6EE7B7'];
+const DEFAULT_ZONE_SETTINGS = {
+  panelWidth: 1,
+  panelHeight: 1.7,
+  panelWatts: 400,
+  panelSpacing: 0.05,
+  panelAngle: 0,
+  panelVmp: 42
+};
+const DEFAULT_MAX_STRING_VMP = 800;
 
 let map;
 let baseLayers = {};
@@ -449,12 +460,15 @@ let currentTool = 'select';
 let selectedZone = null;
 let zones = [];
 let activeBaseLayer = 'dgu';
+let defaultZoneSettings = { ...DEFAULT_ZONE_SETTINGS };
+let maxStringVmp = DEFAULT_MAX_STRING_VMP;
 
 document.addEventListener('DOMContentLoaded', initApp);
 
 function initApp() {
   initMap();
   setTool('select');
+  syncInputsFromSelection();
   document.getElementById('address-input').addEventListener('keydown', event => {
     if (event.key === 'Enter') searchAddress();
   });
@@ -560,6 +574,7 @@ function setTool(tool) {
     modifyInteraction = new ol.interaction.Modify({ features: selectInteraction.getFeatures() });
     selectInteraction.on('select', event => {
       selectedZone = getZoneByFeature(event.selected[0]) || null;
+      syncInputsFromSelection();
       renderZonesList();
       zoneLayer.changed();
     });
@@ -600,6 +615,7 @@ function createZoneFromFeature(feature) {
     area: 0,
     panelCount: 0,
     panels: [],
+    settings: { ...defaultZoneSettings },
     feature
   };
 
@@ -607,6 +623,7 @@ function createZoneFromFeature(feature) {
   zones.push(zone);
   selectedZone = zone;
   updateZoneFromFeature(feature);
+  syncInputsFromSelection();
   updateStats();
   setTool('select');
   renderZonesList();
@@ -631,6 +648,7 @@ function getZoneByFeature(feature) {
 
 function selectZone(id) {
   selectedZone = zones.find(zone => zone.id === id) || null;
+  syncInputsFromSelection();
   if (currentTool !== 'select') setTool('select');
   if (selectInteraction && selectedZone) {
     selectInteraction.getFeatures().clear();
@@ -646,6 +664,7 @@ function deleteZone(zone) {
   zoneSource.removeFeature(zone.feature);
   zones = zones.filter(candidate => candidate.id !== zone.id);
   if (selectedZone?.id === zone.id) selectedZone = null;
+  syncInputsFromSelection();
   updateStats();
 }
 
@@ -654,23 +673,28 @@ function clearProject() {
   panelSource.clear();
   zones = [];
   selectedZone = null;
+  syncInputsFromSelection();
   updateStats();
 }
 
 function updateStats() {
-  const panelWidth = readNumber('panel-width', 1);
-  const panelHeight = readNumber('panel-height', 1.7);
-  const panelSpacing = readNumber('panel-spacing', 0.05);
-  const panelAngle = readNumber('panel-angle', 0);
-
   panelSource.clear();
 
   zones.forEach(zone => {
+    zone.settings = normalizeZoneSettings(zone.settings);
+    const settings = zone.settings;
     const localFrame = getLocalFrame(zone.coordinates);
     const localPolygon = zone.coordinates.map(([lon, lat]) =>
       lonLatToLocalMeters(lon, lat, localFrame.originLon, localFrame.originLat)
     );
-    const layout = computePanelLayoutInPolygon(localPolygon, panelWidth, panelHeight, panelSpacing, true, panelAngle);
+    const layout = computePanelLayoutInPolygon(
+      localPolygon,
+      settings.panelWidth,
+      settings.panelHeight,
+      settings.panelSpacing,
+      true,
+      settings.panelAngle
+    );
 
     zone.area = getFeatureArea(zone.feature);
     zone.panelCount = layout.count;
@@ -678,10 +702,9 @@ function updateStats() {
     renderPanels(zone, layout.placements, localFrame);
   });
 
-  const watts = readNumber('panel-watts', 400);
   const totalPanels = zones.reduce((sum, zone) => sum + zone.panelCount, 0);
   const totalArea = zones.reduce((sum, zone) => sum + zone.area, 0);
-  const kwp = totalPanels * watts / 1000;
+  const kwp = zones.reduce((sum, zone) => sum + zone.panelCount * zone.settings.panelWatts / 1000, 0);
   const annualKwh = Math.round(kwp * 1100);
 
   document.getElementById('stat-panels').textContent = String(totalPanels);
@@ -690,6 +713,72 @@ function updateStats() {
   document.getElementById('stat-kwh').textContent = annualKwh.toLocaleString();
   renderZonesList();
   zoneLayer.changed();
+}
+
+function getActiveSettingsTarget() {
+  if (selectedZone) selectedZone.settings = normalizeZoneSettings(selectedZone.settings);
+  return selectedZone ? selectedZone.settings : defaultZoneSettings;
+}
+
+function normalizeZoneSettings(settings = {}) {
+  return {
+    ...DEFAULT_ZONE_SETTINGS,
+    ...settings
+  };
+}
+
+function readSettingsFromInputs() {
+  return {
+    panelWidth: readNumber('panel-width', DEFAULT_ZONE_SETTINGS.panelWidth),
+    panelHeight: readNumber('panel-height', DEFAULT_ZONE_SETTINGS.panelHeight),
+    panelWatts: readNumber('panel-watts', DEFAULT_ZONE_SETTINGS.panelWatts),
+    panelVmp: readNumber('panel-vmp', DEFAULT_ZONE_SETTINGS.panelVmp),
+    panelSpacing: readNumber('panel-spacing', DEFAULT_ZONE_SETTINGS.panelSpacing),
+    panelAngle: readNumber('panel-angle', DEFAULT_ZONE_SETTINGS.panelAngle)
+  };
+}
+
+function writeSettingsToInputs(settings) {
+  const normalized = normalizeZoneSettings(settings);
+  document.getElementById('panel-width').value = normalized.panelWidth;
+  document.getElementById('panel-height').value = normalized.panelHeight;
+  document.getElementById('panel-watts').value = normalized.panelWatts;
+  document.getElementById('panel-vmp').value = normalized.panelVmp;
+  document.getElementById('panel-spacing').value = normalized.panelSpacing;
+  document.getElementById('panel-angle').value = normalized.panelAngle;
+  document.getElementById('max-string-vmp').value = maxStringVmp;
+}
+
+function syncInputsFromSelection() {
+  if (selectedZone) selectedZone.settings = normalizeZoneSettings(selectedZone.settings);
+  writeSettingsToInputs(getActiveSettingsTarget());
+}
+
+function onSettingsInput() {
+  const target = getActiveSettingsTarget();
+  Object.assign(target, readSettingsFromInputs());
+  if (selectedZone) selectedZone.settings = normalizeZoneSettings(target);
+  updateStats();
+}
+
+function onStringSettingsInput() {
+  maxStringVmp = readNumber('max-string-vmp', DEFAULT_MAX_STRING_VMP);
+  updateStats();
+}
+
+function getStringRecommendation(zone) {
+  const settings = normalizeZoneSettings(zone.settings);
+  if (!zone.panelCount) {
+    return { strings: 0, modulesPerString: 0, label: '0 strings' };
+  }
+  const panelVmp = Math.max(settings.panelVmp, 0.1);
+  const modulesPerString = Math.max(1, Math.floor(maxStringVmp / panelVmp));
+  const strings = Math.ceil(zone.panelCount / modulesPerString);
+  return {
+    strings,
+    modulesPerString,
+    label: `${strings} strings, up to ${modulesPerString} panels/string`
+  };
 }
 
 function getFeatureArea(feature) {
@@ -712,7 +801,7 @@ function renderPanels(zone, placements, frame) {
   });
 }
 
-function renderZonesList() {
+function renderZonesListLegacy() {
   const list = document.getElementById('zones-list');
   if (!zones.length) {
     list.innerHTML = '<div class="zone-meta">No roof zones yet.</div>';
@@ -733,6 +822,31 @@ function renderZonesList() {
 
 function deleteZoneById(id) {
   deleteZone(zones.find(zone => zone.id === id));
+}
+
+function renderZonesList() {
+  const list = document.getElementById('zones-list');
+  if (!zones.length) {
+    list.innerHTML = '<div class="zone-meta">No roof zones yet.</div>';
+    return;
+  }
+
+  list.innerHTML = zones.map(zone => {
+    const settings = normalizeZoneSettings(zone.settings);
+    const kwp = zone.panelCount * settings.panelWatts / 1000;
+    const stringRecommendation = getStringRecommendation(zone);
+    return `
+      <div class="zone-item ${selectedZone?.id === zone.id ? 'selected' : ''}" onclick="selectZone(${zone.id})">
+        <div class="zone-color" style="background:${zone.color}"></div>
+        <div>
+          <div class="zone-name">${zone.name}</div>
+          <div class="zone-meta">${zone.area.toFixed(1)} m2 | ${zone.panelCount} panels | ${kwp.toFixed(2)} kWp</div>
+          <div class="zone-meta">${settings.panelAngle} deg | ${stringRecommendation.label}</div>
+        </div>
+        <button class="btn btn-danger" onclick="event.stopPropagation(); deleteZoneById(${zone.id})">Delete</button>
+      </div>
+    `;
+  }).join('');
 }
 
 function computePanelLayoutInPolygon(polygonPoints, panelWidth, panelHeight, panelSpacing, keepPlacements = false, angleDeg = 0) {
@@ -884,9 +998,8 @@ function fitToLonLat(lonLat, zoom) {
 }
 
 function exportReport() {
-  const watts = readNumber('panel-watts', 400);
   const totalPanels = zones.reduce((sum, zone) => sum + zone.panelCount, 0);
-  const kwp = totalPanels * watts / 1000;
+  const kwp = zones.reduce((sum, zone) => sum + zone.panelCount * normalizeZoneSettings(zone.settings).panelWatts / 1000, 0);
   const totalArea = zones.reduce((sum, zone) => sum + zone.area, 0);
   const annualKwh = Math.round(kwp * 1100);
   const labels = { dgu: 'DGU Orthophoto 2024', esri: 'Esri World Imagery', osm: 'OpenStreetMap' };
@@ -906,10 +1019,13 @@ function exportReport() {
     '',
     'ZONES',
     '-'.repeat(30),
-    ...(zones.length ? zones.map(zone =>
-      `${zone.name}: ${zone.panelCount} panels, ${zone.area.toFixed(1)} m2, ${(zone.panelCount * watts / 1000).toFixed(2)} kWp`
-    ) : ['No zones drawn.']),
+    ...(zones.length ? zones.map(zone => {
+      const settings = normalizeZoneSettings(zone.settings);
+      const stringRecommendation = getStringRecommendation(zone);
+      return `${zone.name}: ${zone.panelCount} panels, ${zone.area.toFixed(1)} m2, ${(zone.panelCount * settings.panelWatts / 1000).toFixed(2)} kWp, angle ${settings.panelAngle} deg, panel ${settings.panelWidth}x${settings.panelHeight} m, ${settings.panelWatts} W, ${settings.panelVmp} Vmp, spacing ${settings.panelSpacing} m, ${stringRecommendation.label}`;
+    }) : ['No zones drawn.']),
     '',
+    `String planning: max string Vmp ${maxStringVmp} V. Recommendations are planning estimates only.`,
     'NOTE: Imagery, measurements, annual yield, and panel fit are planning estimates.',
     'Confirm final layout, setbacks, obstacles, roof condition, and code requirements on site.'
   ];
