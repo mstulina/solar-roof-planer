@@ -381,8 +381,8 @@
       <div class="config-row">
         <label for="imagery-layer">Base layer</label>
         <select id="imagery-layer" onchange="setBaseLayer(this.value)">
+          <option value="esri" selected>Esri Imagery</option>
           <option value="dgu">DGU Ortho</option>
-          <option value="esri">Esri Imagery</option>
           <option value="osm">OpenStreetMap</option>
         </select>
       </div>
@@ -423,7 +423,7 @@
     <div id="map"></div>
     <div class="map-topbar">
       <div class="instructions" id="instructions">Draw a roof zone, then drag its vertices in Select/Edit mode. The panel count is measured in real-world meters and stays stable while zooming.</div>
-      <div class="map-pill" id="source-badge">OpenLayers · DGU Ortho</div>
+      <div class="map-pill" id="source-badge">OpenLayers · Esri Imagery</div>
     </div>
     <div class="zoom-controls">
       <button class="btn btn-ghost" onclick="zoomMap(1)">+</button>
@@ -448,7 +448,7 @@ let modifyInteraction;
 let currentTool = 'select';
 let selectedZone = null;
 let zones = [];
-let activeBaseLayer = 'dgu';
+let activeBaseLayer = 'esri';
 
 document.addEventListener('DOMContentLoaded', initApp);
 
@@ -465,7 +465,7 @@ function initApp() {
 function initMap() {
   baseLayers = {
     dgu: new ol.layer.Tile({
-      visible: true,
+      visible: false,
       source: new ol.source.TileWMS({
         url: 'https://geoportal.dgu.hr/services/inspire/orthophoto_2024/wms',
         params: {
@@ -478,7 +478,7 @@ function initMap() {
       })
     }),
     esri: new ol.layer.Tile({
-      visible: false,
+      visible: true,
       source: new ol.source.XYZ({
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         maxZoom: 21,
