@@ -20,9 +20,11 @@ It supports:
 - erase mode for clicked zones
 - live area and panel-fit recalculation
 - visual panel overlays as OpenLayers vector polygons
+- independent per-zone panel width, height, wattage, Vmp, spacing, and angle
+- global maximum string Vmp setting with per-zone string count recommendations
 - address search through Nominatim plus direct coordinate search
 - mobile layout with a hideable slide-over sidebar
-- text report export
+- text report export with per-zone settings and string guidance
 
 ## Files
 
@@ -55,11 +57,19 @@ Zones are stored in real map coordinates, not screen pixels:
   area,
   panelCount,
   panels,
+  settings: {
+    panelWidth,
+    panelHeight,
+    panelWatts,
+    panelSpacing,
+    panelAngle,
+    panelVmp
+  },
   feature
 }
 ```
 
-`feature` is the OpenLayers polygon feature. `coordinates` is the serializable geometry source for panel calculations and future persistence.
+`feature` is the OpenLayers polygon feature. `coordinates` is the serializable geometry source for panel calculations and future persistence. New zones copy `defaultZoneSettings`; selecting a zone loads its settings into the sidebar, and edits update only that selected zone. `maxStringVmp` is global and defaults to `800`.
 
 ### Important functions
 
@@ -69,6 +79,9 @@ Zones are stored in real map coordinates, not screen pixels:
 - `createZoneFromFeature(feature)` - creates a new zone from an OpenLayers draw result
 - `updateZoneFromFeature(feature)` - synchronizes lon/lat coordinates from a polygon feature
 - `updateStats()` - recalculates area, panel layout, stats, zone list, and panel overlays
+- `syncInputsFromSelection()` - loads selected-zone settings or default settings into the sidebar inputs
+- `onSettingsInput()` - writes sidebar panel inputs to the selected zone, or to defaults when no zone is selected
+- `getStringRecommendation(zone)` - calculates recommended string count from panel count, panel Vmp, and global max string Vmp
 - `computePanelLayoutInPolygon(...)` - shared panel-fit engine in local meter coordinates
 - `renderPanels(zone, placements, frame)` - renders panel overlays as vector polygons
 - `searchAddress()` - Nominatim or coordinate search
@@ -80,7 +93,7 @@ Zones are stored in real map coordinates, not screen pixels:
 The fit logic:
 
 1. Converts zone lon/lat points into a local meter frame around the zone centroid.
-2. Rotates the polygon by the configured panel angle.
+2. Rotates the polygon by that zone's configured panel angle.
 3. Tries portrait and landscape panel orientations.
 4. Sweeps a deterministic placement grid with several offsets.
 5. Accepts a panel when its corners and center are inside the polygon.
@@ -93,6 +106,7 @@ This is still a heuristic, not a full packing optimizer.
 - DGU WMS availability, projection support, and production terms should be verified before public use.
 - Nominatim is appropriate for light development/testing, not heavy production geocoding.
 - Panel fitting is approximate and does not handle setbacks, obstacles, roof pitch, fire paths, or manual panel movement.
+- String recommendations are planning aids only and do not validate cold-weather Voc, inverter MPPT/current limits, optimizer rules, or local electrical code.
 - Polygon self-intersections are not validated.
 - No persistence layer exists yet. Reloading the page loses zones.
 - Export is still a plain text report.
@@ -118,17 +132,20 @@ python -m venv .venv
 .\.venv\Scripts\python -m pytest
 ```
 
-The current baseline passes 5 tests. They cover:
+The current baseline contains 8 tests. They cover:
 
 - app boot without Google Maps
 - panel layout determinism in the browser context
 - programmatic zone creation, stats, and panel overlays
+- copied per-zone default settings
+- independent selected-zone panel settings and input reloading
+- string recommendations from panel Vmp and global max string Vmp
 - screenshot nonblank scan for OpenStreetMap
 - screenshot nonblank scan after zone/panel rendering
 
 Screenshot artifacts are written to `test-artifacts/` and intentionally ignored by Git.
 
-Run the test suite after every code or behavior change before committing.
+Run the test suite after every code or behavior change before committing. If the checked-in `.venv` fails with a missing `Python310` path, recreate it with the setup commands above before running tests.
 
 ## Manual regression checklist
 
@@ -140,7 +157,9 @@ Run through these before handoff when possible:
 - Draw a roof polygon and finish it with double-click.
 - Select the zone and drag vertices.
 - Confirm area, stats, zone list, and panels update after editing.
-- Change panel width, height, spacing, wattage, and angle.
+- Change panel width, height, spacing, wattage, Vmp, and angle.
+- Draw two zones, set different angles/settings, and confirm selection reloads each zone's values.
+- Change global max string Vmp and confirm all zone string recommendations update.
 - Confirm panel count remains stable across zoom/pan/resize.
 - Delete a zone through erase mode and through the zone list.
 - Search `Zadar, Croatia`.
@@ -153,7 +172,6 @@ Run through these before handoff when possible:
 
 - Save/load project JSON.
 - Obstacle and exclusion zone support.
-- Per-zone panel angle.
 - Better snapping to roof edges.
 - Export to PDF/PNG.
 - Clearer touch handles for phone editing.

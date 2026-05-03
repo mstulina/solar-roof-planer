@@ -43,6 +43,9 @@ Improve the app without breaking the current working flows:
 - `selectedZone` points to the currently selected zone or `null`.
 - Zone geometry is stored as `coordinates: [[lon, lat], ...]`.
 - The OpenLayers polygon feature is stored as `zone.feature`.
+- Each zone owns a `settings` object for panel width, height, watts, spacing, angle, and Vmp.
+- `defaultZoneSettings` is copied into newly drawn zones; sidebar edits apply to `selectedZone.settings` when a zone is selected.
+- `maxStringVmp` is a global string-planning setting and defaults to 800 V.
 - `updateStats()` is the main refresh path after most state changes.
 - `computePanelLayoutInPolygon(...)` is the panel-fit engine.
 
@@ -66,6 +69,8 @@ Improve the app without breaking the current working flows:
 
 - Use local meter coordinates for layout.
 - Update counts and overlays together.
+- Use each zone's own settings when recalculating panel layout.
+- Keep selection/input synchronization intact when changing settings controls.
 - Keep the algorithm deterministic and responsive enough for browser use.
 - Confirm counts do not change from zooming alone.
 
@@ -82,7 +87,9 @@ Improve the app without breaking the current working flows:
 - Draw a zone.
 - Select and edit it.
 - Delete it.
-- Change panel width, height, spacing, wattage, and angle.
+- Change panel width, height, spacing, wattage, Vmp, and angle.
+- Confirm two zones can have different settings and selecting each zone reloads the correct values.
+- Confirm global max string Vmp updates string recommendations without changing zone panel settings.
 - Confirm panel count and visible overlays update.
 - Search an address and coordinates.
 - Export a report.
@@ -111,7 +118,6 @@ python -m venv .venv
 
 - save/load project state as JSON
 - obstacle / exclusion zone support
-- per-zone angle controls
 - better snapping to roof edges
 - export to PDF/PNG
 - import/export of project files
