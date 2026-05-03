@@ -381,8 +381,8 @@
       <div class="config-row">
         <label for="imagery-layer">Base layer</label>
         <select id="imagery-layer" onchange="setBaseLayer(this.value)">
-          <option value="esri" selected>Esri Imagery</option>
-          <option value="dgu">DGU Ortho</option>
+          <option value="dgu" selected>DGU Ortho 2024</option>
+          <option value="esri">Esri Imagery</option>
           <option value="osm">OpenStreetMap</option>
         </select>
       </div>
@@ -423,7 +423,7 @@
     <div id="map"></div>
     <div class="map-topbar">
       <div class="instructions" id="instructions">Draw a roof zone, then drag its vertices in Select/Edit mode. The panel count is measured in real-world meters and stays stable while zooming.</div>
-      <div class="map-pill" id="source-badge">OpenLayers · Esri Imagery</div>
+      <div class="map-pill" id="source-badge">OpenLayers · DGU Ortho 2024</div>
     </div>
     <div class="zoom-controls">
       <button class="btn btn-ghost" onclick="zoomMap(1)">+</button>
@@ -448,7 +448,7 @@ let modifyInteraction;
 let currentTool = 'select';
 let selectedZone = null;
 let zones = [];
-let activeBaseLayer = 'esri';
+let activeBaseLayer = 'dgu';
 
 document.addEventListener('DOMContentLoaded', initApp);
 
@@ -464,24 +464,25 @@ function initApp() {
 
 function initMap() {
   baseLayers = {
-    dgu: new ol.layer.Tile({
-      visible: false,
-      source: new ol.source.TileWMS({
-        url: 'https://geoportal.dgu.hr/services/inspire/orthophoto_2024/wms',
+    dgu: new ol.layer.Image({
+      visible: true,
+      source: new ol.source.ImageWMS({
+        url: 'https://geoportal.dgu.hr/services/inspire/orthophoto_2024/ows',
         params: {
           LAYERS: 'OI.OrthoimageCoverage',
-          TILED: true,
           FORMAT: 'image/png',
-          VERSION: '1.3.0'
+          VERSION: '1.1.1'
         },
+        projection: 'EPSG:4326',
+        ratio: 1.5,
         crossOrigin: 'anonymous'
       })
     }),
     esri: new ol.layer.Tile({
-      visible: true,
+      visible: false,
       source: new ol.source.XYZ({
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        maxZoom: 21,
+        maxZoom: 18,
         crossOrigin: 'anonymous',
         attributions: 'Tiles © Esri'
       })
@@ -536,7 +537,7 @@ function initMap() {
 function setBaseLayer(key) {
   activeBaseLayer = key;
   Object.entries(baseLayers).forEach(([layerKey, layer]) => layer.setVisible(layerKey === key));
-  const labels = { dgu: 'DGU Ortho', esri: 'Esri Imagery', osm: 'OpenStreetMap' };
+  const labels = { dgu: 'DGU Ortho 2024', esri: 'Esri Imagery', osm: 'OpenStreetMap' };
   document.getElementById('source-badge').textContent = `OpenLayers · ${labels[key] || key}`;
   closeSidebarOnMobile();
 }
