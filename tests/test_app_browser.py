@@ -2,6 +2,7 @@ import http.server
 import socket
 import socketserver
 import threading
+from urllib.parse import parse_qs, urlparse
 from pathlib import Path
 
 import pytest
@@ -68,6 +69,128 @@ def test_app_boots_without_google_maps(page):
     assert page.locator("script[src*='maps.googleapis']").count() == 0
     assert page.evaluate("() => typeof google === 'undefined'")
     assert not [error for error in errors if "ReferenceError" in error or "TypeError" in error]
+
+
+def test_cadastral_layers_are_configured_and_toggleable(page):
+    page, _ = page
+
+    result = page.evaluate(
+        """() => {
+            const parcelSource = cadastralLayers.parcels.getSource();
+            const zoningSource = cadastralLayers.zoning.getSource();
+            document.getElementById('parcel-layer-toggle').checked = false;
+            document.getElementById('zoning-layer-toggle').checked = true;
+            setCadastralLayerVisibility();
+            return {
+              parcelUrl: parcelSource.getUrl(),
+              parcelLayer: parcelSource.getParams().LAYERS,
+              zoningLayer: zoningSource.getParams().LAYERS,
+              parcelVisible: cadastralLayers.parcels.getVisible(),
+              zoningVisible: cadastralLayers.zoning.getVisible()
+            };
+        }"""
+    )
+
+    assert result["parcelUrl"] == "https://api.uredjenazemlja.hr/services/inspire/cp_wms/wms"
+    assert result["parcelLayer"] == "CP.CadastralParcel"
+    assert result["zoningLayer"] == "CP.CadastralZoning"
+    assert result["parcelVisible"] is False
+    assert result["zoningVisible"] is True
+
+
+def test_search_is_limited_to_croatia(page):
+    page, _ = page
+    requested_urls = []
+
+    def handle_search(route):
+        requested_urls.append(route.request.url)
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body='[{"lon":"15.2314","lat":"44.1194","display_name":"Zadar, Croatia"}]',
+        )
+
+    page.route("https://nominatim.openstreetmap.org/search?**", handle_search)
+    page.route("https://api.uredjenazemlja.hr/services/inspire/cp/wfs?**", lambda route: route.fulfill(status=200, body='{"features":[]}'))
+    page.locator("#address-input").fill("Zadar")
+    page.locator("button", has_text="Go").click()
+    page.wait_for_function("() => document.getElementById('instructions').textContent.includes('Zadar')")
+
+    parsed = parse_qs(urlparse(requested_urls[-1]).query)
+    assert parsed["countrycodes"] == ["hr"]
+    assert parsed["bounded"] == ["1"]
+    assert "13.202" in parsed["viewbox"][0]
+
+    page.locator("#address-input").fill("48.8566, 2.3522")
+    page.locator("button", has_text="Go").click()
+    assert "limited to Croatia" in page.locator("#instructions").text_content()
+
+
+def test_mock_wfs_selects_parcel_and_enforces_zone_containment(page):
+    page, _ = page
+    parcel_geojson = """{
+      "type": "FeatureCollection",
+      "features": [{
+        "type": "Feature",
+        "id": "parcel-1",
+        "properties": {"localId": "KO Zadar 123/4"},
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[[15.2310,44.1190],[15.2320,44.1190],[15.2320,44.1200],[15.2310,44.1200],[15.2310,44.1190]]]
+        }
+      }]
+    }"""
+
+    page.route(
+        "https://api.uredjenazemlja.hr/services/inspire/cp/wfs?**",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=parcel_geojson),
+    )
+
+    result = page.evaluate(
+        """async () => {
+            await queryParcelAtLonLat([15.2314, 44.1194]);
+
+            function addZone(coords) {
+              const ring = coords.map(coord => ol.proj.fromLonLat(coord));
+              ring.push(ring[0]);
+              const feature = new ol.Feature(new ol.geom.Polygon([ring]));
+              zoneSource.addFeature(feature);
+              createZoneFromFeature(feature);
+              return zones[zones.length - 1];
+            }
+
+            const inside = addZone([
+              [15.2312,44.1192],
+              [15.2314,44.1192],
+              [15.2314,44.1194],
+              [15.2312,44.1194]
+            ]);
+            const outside = addZone([
+              [15.2318,44.1192],
+              [15.2323,44.1192],
+              [15.2323,44.1194],
+              [15.2318,44.1194]
+            ]);
+            updateStats();
+            exportReport();
+
+            return {
+              parcelId: selectedParcel.id,
+              parcelFeatures: selectedParcelSource.getFeatures().length,
+              insideValid: inside.parcelValid,
+              outsideValid: outside.parcelValid,
+              instructions: document.getElementById('instructions').textContent,
+              status: document.getElementById('selected-plot-status').textContent
+            };
+        }"""
+    )
+
+    assert result["parcelId"] == "KO Zadar 123/4"
+    assert result["parcelFeatures"] == 1
+    assert result["insideValid"] is True
+    assert result["outsideValid"] is False
+    assert "Export blocked" in result["instructions"]
+    assert "KO Zadar 123/4" in result["status"]
 
 
 def test_panel_layout_engine_is_deterministic(page):
