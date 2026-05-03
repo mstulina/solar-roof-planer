@@ -358,6 +358,49 @@
     justify-self: end;
   }
 
+  .parcel-modal {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    background: rgba(5,7,12,0.58);
+    backdrop-filter: blur(3px);
+  }
+
+  .parcel-modal.open { display: flex; }
+
+  .parcel-dialog {
+    width: min(420px, calc(100vw - 36px));
+    border-radius: 8px;
+    padding: 18px;
+    background: rgba(17,24,39,0.98);
+    border: 1px solid rgba(255,255,255,0.16);
+    box-shadow: 0 22px 60px rgba(0,0,0,0.46);
+  }
+
+  .parcel-dialog h3 {
+    margin-bottom: 10px;
+    color: var(--text);
+    font-size: 16px;
+  }
+
+  .parcel-dialog p {
+    margin-bottom: 12px;
+    color: var(--text-dim);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .parcel-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
   .sidebar-backdrop {
     display: none;
     position: absolute;
@@ -491,6 +534,17 @@
         <div class="zone-meta" id="selected-plot-details"></div>
       </div>
     </div>
+    <div class="parcel-modal" id="parcel-modal" role="dialog" aria-modal="true" aria-labelledby="parcel-modal-title">
+      <div class="parcel-dialog">
+        <h3 id="parcel-modal-title">Parcel lookup</h3>
+        <p id="parcel-modal-message">Finding cadastral parcel...</p>
+        <div class="zone-meta" id="parcel-modal-details"></div>
+        <div class="parcel-modal-actions" id="parcel-modal-actions">
+          <button class="btn btn-ghost" id="parcel-modal-cancel" onclick="cancelParcelConfirmation()">Cancel</button>
+          <button class="btn btn-sun" id="parcel-modal-confirm" onclick="confirmPendingParcel()">Confirm parcel</button>
+        </div>
+      </div>
+    </div>
     <div class="zoom-controls">
       <button class="btn btn-ghost" onclick="zoomMap(1)">+</button>
       <button class="btn btn-ghost" onclick="zoomMap(-1)">−</button>
@@ -541,6 +595,7 @@ let selectedZone = null;
 let zones = [];
 let activeBaseLayer = 'dgu';
 let selectedParcel = null;
+let pendingParcel = null;
 let parcelFetchController = null;
 let parcelQueryTimer = null;
 let parcelLookupEnabled = true;
@@ -859,7 +914,7 @@ function selectParcelAtLonLat(lonLat) {
 
 function queryParcelAtLonLat(lonLat) {
   if (!isLonLatInCroatia(lonLat)) {
-    setSelectedParcel(null, 'Selected plot: outside Croatia');
+    showParcelError('Outside Croatia', 'Parcel lookup is limited to Croatian cadastral land.');
     return Promise.resolve(null);
   }
 
@@ -868,6 +923,7 @@ function queryParcelAtLonLat(lonLat) {
   const lookupController = parcelFetchController;
   const timeoutId = window.setTimeout(() => lookupController.abort('timeout'), PARCEL_LOOKUP_TIMEOUT_MS);
   setSelectedPlotStatus('Selected plot: finding parcel...');
+  showParcelLookupModal('Finding cadastral parcel...', 'Waiting for official cadastral data. Confirm the parcel before continuing.');
 
   return fetch(buildParcelQueryUrl(lonLat), {
     headers: { Accept: 'application/json, application/gml+xml, text/xml' },
@@ -876,12 +932,18 @@ function queryParcelAtLonLat(lonLat) {
     .then(response => response.ok ? response.text() : Promise.reject(new Error('Parcel lookup failed')))
     .then(text => {
       const parcel = parseParcelResponse(text, lonLat);
-      setSelectedParcel(parcel, parcel ? null : 'Selected plot: no parcel found');
+      if (parcel) {
+        showParcelConfirmation(parcel);
+      } else {
+        showParcelError('No parcel found', 'No cadastral parcel was returned for this click. Try clicking closer to the parcel center.');
+        setSelectedPlotStatus('Selected plot: no parcel found');
+      }
       return parcel;
     })
     .catch(error => {
       if (error.name === 'AbortError' && lookupController !== parcelFetchController) return null;
-      setSelectedParcel(null, 'Selected plot: unavailable');
+      showParcelError('Parcel lookup unavailable', 'The official cadastral service did not respond. Try again or turn parcel lookup off in map settings.');
+      setSelectedPlotStatus('Selected plot: unavailable');
       return null;
     })
     .finally(() => {
@@ -1009,6 +1071,55 @@ function setSelectedPlotStatus(message) {
 function setSelectedPlotDetails(message) {
   const details = document.getElementById('selected-plot-details');
   if (details) details.textContent = message;
+}
+
+function showParcelLookupModal(title, message) {
+  pendingParcel = null;
+  document.getElementById('parcel-modal-title').textContent = title;
+  document.getElementById('parcel-modal-message').textContent = message;
+  document.getElementById('parcel-modal-details').textContent = '';
+  document.getElementById('parcel-modal-cancel').textContent = 'Cancel';
+  document.getElementById('parcel-modal-confirm').style.display = 'none';
+  document.getElementById('parcel-modal').classList.add('open');
+  closeSettingsMenu();
+}
+
+function showParcelConfirmation(parcel) {
+  pendingParcel = parcel;
+  document.getElementById('parcel-modal-title').textContent = 'Confirm cadastral parcel';
+  document.getElementById('parcel-modal-message').textContent = `Selected plot: ${parcel.id}`;
+  document.getElementById('parcel-modal-details').textContent = getSelectedParcelInfo(parcel);
+  document.getElementById('parcel-modal-cancel').textContent = 'Cancel';
+  document.getElementById('parcel-modal-confirm').style.display = '';
+  document.getElementById('parcel-modal').classList.add('open');
+}
+
+function showParcelError(title, message) {
+  pendingParcel = null;
+  document.getElementById('parcel-modal-title').textContent = title;
+  document.getElementById('parcel-modal-message').textContent = message;
+  document.getElementById('parcel-modal-details').textContent = '';
+  document.getElementById('parcel-modal-cancel').textContent = 'Close';
+  document.getElementById('parcel-modal-confirm').style.display = 'none';
+  document.getElementById('parcel-modal').classList.add('open');
+}
+
+function confirmPendingParcel() {
+  if (!pendingParcel) return;
+  setSelectedParcel(pendingParcel);
+  pendingParcel = null;
+  closeParcelModal();
+  setInstructions('Cadastral plot confirmed. Draw roof zones inside the selected plot.');
+}
+
+function cancelParcelConfirmation() {
+  parcelFetchController?.abort();
+  pendingParcel = null;
+  closeParcelModal();
+}
+
+function closeParcelModal() {
+  document.getElementById('parcel-modal').classList.remove('open');
 }
 
 function getSelectedParcelInfo(parcel) {

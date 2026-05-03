@@ -158,7 +158,7 @@ def test_mock_wfs_selects_parcel_and_enforces_zone_containment(page):
         lambda route: route.fulfill(status=200, content_type="application/json", body=parcel_geojson),
     )
 
-    result = page.evaluate(
+    pending = page.evaluate(
         """async () => {
             const coordinate = ol.proj.fromLonLat([15.2314, 44.1194]);
             map.dispatchEvent({
@@ -167,6 +167,26 @@ def test_mock_wfs_selects_parcel_and_enforces_zone_containment(page):
               pixel: map.getPixelFromCoordinate(coordinate)
             });
             await new Promise(resolve => setTimeout(resolve, 250));
+            return {
+              pendingId: pendingParcel && pendingParcel.id,
+              selected: selectedParcel,
+              modalOpen: document.getElementById('parcel-modal').classList.contains('open'),
+              confirmVisible: document.getElementById('parcel-modal-confirm').style.display !== 'none',
+              modalDetails: document.getElementById('parcel-modal-details').textContent
+            };
+        }"""
+    )
+
+    assert pending["pendingId"] == "KO Zadar 123/4"
+    assert pending["selected"] is None
+    assert pending["modalOpen"] is True
+    assert pending["confirmVisible"] is True
+    assert "Approx. area" in pending["modalDetails"]
+
+    page.locator("#parcel-modal-confirm").click()
+
+    result = page.evaluate(
+        """() => {
 
             function addZone(coords) {
               const ring = coords.map(coord => ol.proj.fromLonLat(coord));
@@ -199,7 +219,8 @@ def test_mock_wfs_selects_parcel_and_enforces_zone_containment(page):
               outsideValid: outside.parcelValid,
               instructions: document.getElementById('instructions').textContent,
               status: document.getElementById('selected-plot-status').textContent,
-              details: document.getElementById('selected-plot-details').textContent
+              details: document.getElementById('selected-plot-details').textContent,
+              modalOpen: document.getElementById('parcel-modal').classList.contains('open')
             };
         }"""
     )
@@ -212,6 +233,7 @@ def test_mock_wfs_selects_parcel_and_enforces_zone_containment(page):
     assert "KO Zadar 123/4" in result["status"]
     assert "Approx. area" in result["details"]
     assert "Center:" in result["details"]
+    assert result["modalOpen"] is False
 
 
 def test_panel_layout_engine_is_deterministic(page):
