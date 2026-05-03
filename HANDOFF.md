@@ -10,11 +10,15 @@ Static single-page app for drawing roof zones on aerial imagery and estimating s
 
 The current working app is `index.html`.
 
-The OpenLayers migration is complete. The app uses OpenLayers instead of Google Maps and no longer requires a Google Maps API key. The migration plan has been executed and removed from the active project files.
+The OpenLayers migration is complete. The app uses OpenLayers instead of Google Maps and no longer requires a Google Maps API key.
 
 It supports:
 
 - DGU orthophoto WMS, Esri World Imagery, and OpenStreetMap base layers
+- cadastral parcel and cadastral municipality overlays from DGU/uredjenazemlja INSPIRE services
+- Croatia-only address/coordinate search
+- explicit cadastral parcel lookup with a blocking confirmation modal before a parcel becomes active
+- per-zone validation that roof zones stay inside the confirmed cadastral plot
 - OpenLayers polygon drawing
 - select/edit mode with draggable polygon vertices
 - erase mode for clicked zones
@@ -22,9 +26,10 @@ It supports:
 - visual panel overlays as OpenLayers vector polygons
 - independent per-zone panel width, height, wattage, Vmp, spacing, and angle
 - global maximum string Vmp setting with per-zone string count recommendations
-- address search through Nominatim plus direct coordinate search
+- address search through Nominatim plus direct coordinate search, limited to Croatia
 - mobile layout with a hideable slide-over sidebar
-- text report export with per-zone settings and string guidance
+- map settings gear for base layer, cadastral overlay, and parcel lookup controls
+- text report export with selected cadastral plot, per-zone settings, and string guidance
 
 ## Files
 
@@ -42,7 +47,7 @@ The app is intentionally single-file for now.
 
 - Header: branding, address search, export, sidebar toggle
 - Sidebar: tools, imagery selector, panel settings, stats, zone list
-- Main view: OpenLayers map, instruction toast, source badge, zoom controls
+- Main view: OpenLayers map, instruction toast, map settings gear/menu, parcel confirmation modal, zoom controls
 
 ### Map model
 
@@ -57,6 +62,8 @@ Zones are stored in real map coordinates, not screen pixels:
   area,
   panelCount,
   panels,
+  parcelValid,
+  parcelMessage,
   settings: {
     panelWidth,
     panelHeight,
@@ -69,12 +76,24 @@ Zones are stored in real map coordinates, not screen pixels:
 }
 ```
 
-`feature` is the OpenLayers polygon feature. `coordinates` is the serializable geometry source for panel calculations and future persistence. New zones copy `defaultZoneSettings`; selecting a zone loads its settings into the sidebar, and edits update only that selected zone. `maxStringVmp` is global and defaults to `800`.
+`feature` is the OpenLayers polygon feature. `coordinates` is the serializable geometry source for panel calculations and future persistence. New zones copy `defaultZoneSettings`; selecting a zone loads its settings into the sidebar, and edits update only that selected zone. `parcelValid` and `parcelMessage` reflect containment inside the confirmed selected parcel. `maxStringVmp` is global and defaults to `800`.
+
+Parcel state is separate from roof zones:
+
+- `selectedParcel` is the confirmed project cadastral plot
+- `pendingParcel` is a fetched parcel waiting for modal confirmation
+- `selectedParcelSource` renders the confirmed plot highlight
+- parcel lookup can be disabled from the map settings menu because the official WFS can be slow
 
 ### Important functions
 
 - `initMap()` - creates OpenLayers map, base layers, vector layers, and click handlers
 - `setBaseLayer(key)` - switches DGU, Esri, or OSM imagery
+- `setCadastralLayerVisibility()` - toggles cadastral parcel/municipality WMS overlays
+- `setParcelLookupEnabled()` - enables or disables WFS parcel lookup on search/click
+- `selectParcelAtLonLat(...)` / `queryParcelAtLonLat(...)` - fetch candidate parcel data
+- `showParcelConfirmation(...)` / `confirmPendingParcel()` - modal confirmation flow for selected parcels
+- `validateZonesAgainstSelectedParcel()` - updates parcel containment status on all zones
 - `setTool(tool)` - central tool switch for draw, select/edit, pan, erase
 - `createZoneFromFeature(feature)` - creates a new zone from an OpenLayers draw result
 - `updateZoneFromFeature(feature)` - synchronizes lon/lat coordinates from a polygon feature
@@ -84,7 +103,7 @@ Zones are stored in real map coordinates, not screen pixels:
 - `getStringRecommendation(zone)` - calculates recommended string count from panel count, panel Vmp, and global max string Vmp
 - `computePanelLayoutInPolygon(...)` - shared panel-fit engine in local meter coordinates
 - `renderPanels(zone, placements, frame)` - renders panel overlays as vector polygons
-- `searchAddress()` - Nominatim or coordinate search
+- `searchAddress()` - Croatia-bounded Nominatim or coordinate search
 - `exportReport()` - text planning report export
 - `notifyMapResize()` - keeps OpenLayers sized after sidebar changes
 
@@ -104,6 +123,8 @@ This is still a heuristic, not a full packing optimizer.
 ## Known limitations
 
 - DGU WMS availability, projection support, and production terms should be verified before public use.
+- DGU/uredjenazemlja WFS parcel lookup can be slow; the app uses a narrow click query and a confirmation modal, but production UX may still need caching or a backend proxy.
+- Parcel containment is a planning helper, not a legal cadastral determination.
 - Nominatim is appropriate for light development/testing, not heavy production geocoding.
 - Panel fitting is approximate and does not handle setbacks, obstacles, roof pitch, fire paths, or manual panel movement.
 - String recommendations are planning aids only and do not validate cold-weather Voc, inverter MPPT/current limits, optimizer rules, or local electrical code.
@@ -132,15 +153,19 @@ python -m venv .venv
 .\.venv\Scripts\python -m pytest
 ```
 
-The current baseline contains 8 tests. They cover:
+The current baseline contains 11 tests. They cover:
 
 - app boot without Google Maps
+- cadastral WMS layer setup and map settings controls
+- Croatia-bounded search and outside-Croatia coordinate rejection
+- mocked WFS parcel lookup, blocking confirmation, and containment enforcement
 - panel layout determinism in the browser context
 - programmatic zone creation, stats, and panel overlays
 - copied per-zone default settings
 - independent selected-zone panel settings and input reloading
 - string recommendations from panel Vmp and global max string Vmp
 - screenshot nonblank scan for OpenStreetMap
+- screenshot nonblank scan for DGU orthophoto
 - screenshot nonblank scan after zone/panel rendering
 
 Screenshot artifacts are written to `test-artifacts/` and intentionally ignored by Git.
@@ -154,6 +179,10 @@ Run through these before handoff when possible:
 - App loads without any Google Maps API key.
 - No Google Maps script is requested.
 - DGU, Esri, and OSM layer selector changes the visible source.
+- Map settings gear opens on desktop and mobile; base layer and cadastral toggles work.
+- Parcel lookup toggle can be turned off to avoid slow WFS calls.
+- Click a cadastral parcel, confirm the modal, and verify selected plot info appears.
+- Draw one zone inside and one zone outside the confirmed parcel; export should block until all zones are inside.
 - Draw a roof polygon and finish it with double-click.
 - Select the zone and drag vertices.
 - Confirm area, stats, zone list, and panels update after editing.
@@ -164,6 +193,7 @@ Run through these before handoff when possible:
 - Delete a zone through erase mode and through the zone list.
 - Search `Zadar, Croatia`.
 - Search coordinates such as `44.1194, 15.2314`.
+- Search/click outside Croatia should not select a parcel.
 - Export report.
 - Desktop sidebar hide/show works and map resizes.
 - Mobile slide-over menu opens/closes and returns focus to the map.
