@@ -396,6 +396,19 @@ def test_osm_layer_screenshot_is_not_blank(page):
     assert screenshot_is_visually_nonblank(screenshot)
 
 
+def test_dgu_layer_screenshot_is_not_blank(page):
+    page, _ = page
+
+    page.locator("#imagery-layer").select_option("dgu")
+    page.wait_for_timeout(2_500)
+
+    ARTIFACTS.mkdir(exist_ok=True)
+    screenshot = ARTIFACTS / "dgu-layer-smoke.png"
+    page.locator("#map").screenshot(path=str(screenshot))
+
+    assert screenshot_is_visually_nonblank(screenshot)
+
+
 def test_screenshot_after_zone_creation(page):
     page, _ = page
 
