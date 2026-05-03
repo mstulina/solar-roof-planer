@@ -10,7 +10,7 @@ Static single-page app for drawing roof zones on aerial imagery and estimating s
 
 The current working app is `index.html`.
 
-It now uses OpenLayers instead of Google Maps and no longer requires a Google Maps API key.
+The OpenLayers migration is complete. The app uses OpenLayers instead of Google Maps and no longer requires a Google Maps API key. The migration plan has been executed and removed from the active project files.
 
 It supports:
 
@@ -30,7 +30,7 @@ It supports:
 - `README.md` - end-user setup and deploy notes
 - `HANDOFF.md` - project state and technical context
 - `agent.md` - instructions for future coding agents
-- `plan.md` - OpenLayers migration plan that drove this pass
+- `requirements.txt`, `pytest.ini`, `tests/test_app_browser.py` - Python/Playwright regression baseline
 
 ## Architecture summary
 
@@ -127,6 +127,8 @@ The current baseline passes 5 tests. They cover:
 - screenshot nonblank scan after zone/panel rendering
 
 Screenshot artifacts are written to `test-artifacts/` and intentionally ignored by Git.
+
+Run the test suite after every code or behavior change before committing.
 
 ## Manual regression checklist
 

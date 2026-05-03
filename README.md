@@ -65,5 +65,7 @@ Public imagery and geocoding providers can have usage limits or license restrict
 
 - This is a static single-page app.
 - The source of truth is `index.html`.
+- The OpenLayers migration plan has been completed and removed from the active project files.
+- Current stable baseline: OpenLayers app plus 5 passing Python/Playwright regression tests.
 - Panel placement is a planning estimate, not an engineering design.
 - Verify imagery alignment, roof dimensions, setbacks, obstacles, and electrical design on site.
