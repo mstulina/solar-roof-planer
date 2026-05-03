@@ -61,6 +61,11 @@ def screenshot_is_visually_nonblank(path: Path) -> bool:
     return has_contrast and 15 < mean < 245
 
 
+def open_map_settings(page):
+    page.locator(".settings-button").click()
+    page.wait_for_function("() => document.getElementById('settings-panel').classList.contains('open')")
+
+
 def test_app_boots_without_google_maps(page):
     page, errors = page
 
@@ -73,6 +78,13 @@ def test_app_boots_without_google_maps(page):
 
 def test_cadastral_layers_are_configured_and_toggleable(page):
     page, _ = page
+
+    open_map_settings(page)
+    assert page.locator("#imagery-layer").is_visible()
+    assert page.locator("#parcel-lookup-toggle").is_checked()
+    page.locator("#parcel-lookup-toggle").uncheck()
+    assert "Parcel lookup is off" in page.locator("#instructions").text_content()
+    page.locator("#parcel-lookup-toggle").check()
 
     result = page.evaluate(
         """() => {
@@ -383,6 +395,7 @@ def test_string_recommendation_uses_global_voltage_and_panel_vmp(page):
 def test_osm_layer_screenshot_is_not_blank(page):
     page, _ = page
 
+    open_map_settings(page)
     page.locator("#imagery-layer").select_option("osm")
     page.wait_for_function(
         "() => [...document.querySelectorAll('.ol-layer canvas')].some(canvas => canvas.width > 0 && canvas.height > 0)",
@@ -399,6 +412,7 @@ def test_osm_layer_screenshot_is_not_blank(page):
 def test_dgu_layer_screenshot_is_not_blank(page):
     page, _ = page
 
+    open_map_settings(page)
     page.locator("#imagery-layer").select_option("dgu")
     page.wait_for_timeout(2_500)
 

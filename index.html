@@ -266,7 +266,7 @@
     position: absolute;
     top: 14px;
     left: 14px;
-    right: 14px;
+    right: 68px;
     display: flex;
     justify-content: space-between;
     gap: 10px;
@@ -293,6 +293,8 @@
     font-family: "Space Mono", monospace;
   }
 
+  #source-badge { display: none; }
+
   .zoom-controls {
     position: absolute;
     right: 14px;
@@ -308,6 +310,52 @@
     height: 42px;
     padding: 0;
     font-size: 20px;
+  }
+
+  .settings-control {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 18;
+  }
+
+  .settings-button {
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    font-size: 20px;
+  }
+
+  .settings-panel {
+    display: none;
+    position: absolute;
+    top: 50px;
+    right: 0;
+    width: min(320px, calc(100vw - 28px));
+    padding: 14px;
+    border-radius: 8px;
+    background: rgba(17,24,39,0.96);
+    border: 1px solid rgba(255,255,255,0.14);
+    box-shadow: 0 18px 48px rgba(0,0,0,0.38);
+    backdrop-filter: blur(10px);
+  }
+
+  .settings-panel.open { display: block; }
+
+  .settings-row {
+    display: grid;
+    grid-template-columns: 1fr 118px;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+
+  .settings-row input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    justify-self: end;
   }
 
   .sidebar-backdrop {
@@ -349,7 +397,7 @@
 
     .sidebar.mobile-open { transform: translateX(0); }
     .sidebar.closed { width: min(88vw, 320px); transform: translateX(-102%); }
-    .map-topbar { top: 10px; left: 10px; right: 10px; flex-direction: column; align-items: flex-start; }
+    .map-topbar { top: 10px; left: 10px; right: 62px; flex-direction: column; align-items: flex-start; }
     .instructions { max-width: calc(100vw - 20px); }
   }
 </style>
@@ -375,28 +423,6 @@
         <div class="tool-btn" id="tool-pan" onclick="setTool('pan')"><div class="tool-icon">↔</div><div class="tool-label">Pan</div></div>
         <div class="tool-btn" id="tool-erase" onclick="setTool('erase')"><div class="tool-icon">⌫</div><div class="tool-label">Erase</div></div>
       </div>
-    </section>
-
-    <section class="sidebar-section">
-      <h3>Imagery</h3>
-      <div class="config-row">
-        <label for="imagery-layer">Base layer</label>
-        <select id="imagery-layer" onchange="setBaseLayer(this.value)">
-          <option value="dgu" selected>DGU Ortho 2024</option>
-          <option value="esri">Esri Imagery</option>
-          <option value="osm">OpenStreetMap</option>
-        </select>
-      </div>
-      <div class="config-row">
-        <label for="parcel-layer-toggle">Cadastral parcels</label>
-        <input type="checkbox" id="parcel-layer-toggle" checked onchange="setCadastralLayerVisibility()">
-      </div>
-      <div class="config-row">
-        <label for="zoning-layer-toggle">Cadastral municipalities</label>
-        <input type="checkbox" id="zoning-layer-toggle" onchange="setCadastralLayerVisibility()">
-      </div>
-      <div class="zone-meta" id="selected-plot-status">Selected plot: search or center a Croatian parcel</div>
-      <div class="zone-meta" id="selected-plot-details"></div>
     </section>
 
     <section class="sidebar-section">
@@ -437,6 +463,33 @@
     <div class="map-topbar">
       <div class="instructions" id="instructions">Draw a roof zone, then drag its vertices in Select/Edit mode. The panel count is measured in real-world meters and stays stable while zooming.</div>
       <div class="map-pill" id="source-badge">OpenLayers · DGU Ortho 2024</div>
+    </div>
+    <div class="settings-control" id="settings-control">
+      <button class="btn btn-ghost settings-button" onclick="toggleSettingsMenu()" aria-label="Map settings">&#9881;</button>
+      <div class="settings-panel" id="settings-panel">
+        <div class="settings-row">
+          <label for="imagery-layer">Base layer</label>
+          <select id="imagery-layer" onchange="setBaseLayer(this.value)">
+            <option value="dgu" selected>DGU Ortho 2024</option>
+            <option value="esri">Esri Imagery</option>
+            <option value="osm">OpenStreetMap</option>
+          </select>
+        </div>
+        <div class="settings-row">
+          <label for="parcel-layer-toggle">Cadastral parcels</label>
+          <input type="checkbox" id="parcel-layer-toggle" checked onchange="setCadastralLayerVisibility()">
+        </div>
+        <div class="settings-row">
+          <label for="zoning-layer-toggle">Cadastral municipalities</label>
+          <input type="checkbox" id="zoning-layer-toggle" onchange="setCadastralLayerVisibility()">
+        </div>
+        <div class="settings-row">
+          <label for="parcel-lookup-toggle">Parcel lookup</label>
+          <input type="checkbox" id="parcel-lookup-toggle" checked onchange="setParcelLookupEnabled()">
+        </div>
+        <div class="zone-meta" id="selected-plot-status">Selected plot: search or click a Croatian parcel</div>
+        <div class="zone-meta" id="selected-plot-details"></div>
+      </div>
     </div>
     <div class="zoom-controls">
       <button class="btn btn-ghost" onclick="zoomMap(1)">+</button>
@@ -490,6 +543,7 @@ let activeBaseLayer = 'dgu';
 let selectedParcel = null;
 let parcelFetchController = null;
 let parcelQueryTimer = null;
+let parcelLookupEnabled = true;
 let defaultZoneSettings = { ...DEFAULT_ZONE_SETTINGS };
 let maxStringVmp = DEFAULT_MAX_STRING_VMP;
 
@@ -637,7 +691,7 @@ function initMap() {
       return;
     }
     if (currentTool !== 'draw') {
-      queryParcelAtLonLat(ol.proj.toLonLat(event.coordinate));
+      selectParcelAtLonLat(ol.proj.toLonLat(event.coordinate));
     }
   });
 }
@@ -657,13 +711,22 @@ function setBaseLayer(key) {
   Object.entries(baseLayers).forEach(([layerKey, layer]) => layer.setVisible(layerKey === key));
   const labels = { dgu: 'DGU Ortho 2024', esri: 'Esri Imagery', osm: 'OpenStreetMap' };
   document.getElementById('source-badge').textContent = `OpenLayers · ${labels[key] || key}`;
-  closeSidebarOnMobile();
+  closeSettingsMenu();
 }
 
 function setCadastralLayerVisibility() {
   cadastralLayers.parcels?.setVisible(document.getElementById('parcel-layer-toggle').checked);
   cadastralLayers.zoning?.setVisible(document.getElementById('zoning-layer-toggle').checked);
-  closeSidebarOnMobile();
+}
+
+function setParcelLookupEnabled() {
+  parcelLookupEnabled = document.getElementById('parcel-lookup-toggle').checked;
+  if (!parcelLookupEnabled) {
+    parcelFetchController?.abort();
+    setInstructions('Parcel lookup is off. Turn it on in map settings to select cadastral plots.');
+  } else {
+    setInstructions('Parcel lookup is on. Click a cadastral plot to select it.');
+  }
 }
 
 function setTool(tool) {
@@ -784,6 +847,14 @@ function buildParcelQueryUrl(lonLat) {
     count: '10'
   });
   return `${CADASTRAL_WFS_URL}?${params.toString()}`;
+}
+
+function selectParcelAtLonLat(lonLat) {
+  if (!parcelLookupEnabled) {
+    setInstructions('Parcel lookup is off. Turn it on in map settings to select cadastral plots.');
+    return Promise.resolve(null);
+  }
+  return queryParcelAtLonLat(lonLat);
 }
 
 function queryParcelAtLonLat(lonLat) {
@@ -1386,7 +1457,7 @@ function searchAddress() {
     }
     fitToLonLat(lonLat, 20);
     setInstructions(`Centered on ${lonLat[1].toFixed(5)}, ${lonLat[0].toFixed(5)}.`);
-    queryParcelAtLonLat(lonLat);
+    selectParcelAtLonLat(lonLat);
     return;
   }
 
@@ -1409,7 +1480,7 @@ function searchAddress() {
       const lonLat = [Number(result.lon), Number(result.lat)];
       fitToLonLat(lonLat, 20);
       setInstructions(`Centered on ${result.display_name}.`);
-      queryParcelAtLonLat(lonLat);
+      selectParcelAtLonLat(lonLat);
     })
     .catch(error => {
       setInstructions(`${error.message}. Try Croatian coordinates like 44.1194, 15.2314.`);
@@ -1479,6 +1550,14 @@ function exportReport() {
 function zoomMap(step) {
   const view = map.getView();
   view.animate({ zoom: (view.getZoom() || 19) + step, duration: 150 });
+}
+
+function toggleSettingsMenu() {
+  document.getElementById('settings-panel').classList.toggle('open');
+}
+
+function closeSettingsMenu() {
+  document.getElementById('settings-panel')?.classList.remove('open');
 }
 
 function toggleSidebar() {
