@@ -1,24 +1,22 @@
 # Solar Roof Planer
 
-Draw roof zones on satellite imagery and estimate how many solar panels fit in real time.
+Draw roof zones on aerial imagery and estimate how many solar panels fit in real time.
 
 ## Features
 
-- Draw editable roof polygons on Google Maps satellite view
-- Close a zone by clicking near the start point
-- Live panel-fit recalculation as zones or panel settings change
-- Visual placement of rotated panel rectangles inside each zone
-- Manual panel-angle control plus Auto Angle from the selected roof edge
-- Extra on-map zoom controls for more precise phone use
-- Responsive mobile layout with slide-in / hideable side menu
-- Demo mode included when Google Maps is not connected
+- OpenLayers map with DGU orthophoto, Esri imagery, and OpenStreetMap layers
+- Editable roof polygons with draw, select/edit, pan, and erase tools
+- Real-world area measurement in square meters
+- Stable panel-fit estimates that do not change when zooming
+- Visual panel rectangle overlays inside each roof zone
+- Panel width, height, spacing, wattage, and angle controls
+- Responsive mobile layout with a toggleable planner menu
+- Address and coordinate search
 - Export a simple planning report
 
 ## Run locally
 
-You can open `index.html` directly, but a local server is recommended.
-
-### Python
+A local server is recommended because browser security rules can limit map and geocoding behavior from `file://`.
 
 ```bash
 python -m http.server 8000
@@ -26,33 +24,28 @@ python -m http.server 8000
 
 Then open `http://localhost:8000`.
 
-## Google Maps API setup
+## Map sources
 
-This app asks for your Google Maps API key at runtime. The UI is responsive and supports mobile screens with a toggleable planner menu.
+The app does not require a Google Maps API key.
 
-Enable:
+Available base layers:
 
-- Maps JavaScript API
-- Geocoding API
+- DGU Orthophoto 2024 WMS
+- Esri World Imagery
+- OpenStreetMap
 
-Recommended restrictions for the API key:
-
-- Application restriction: HTTP referrers
-- Allowed referrers:
-  - `http://localhost/*`
-  - your GitHub Pages URL
-- API restrictions:
-  - Maps JavaScript API
-  - Geocoding API
+Public imagery and geocoding providers can have usage limits or license restrictions. Confirm the terms before production or commercial deployment.
 
 ## Deploy on GitHub Pages
 
-1. Push this repo to GitHub
-2. In GitHub, open **Settings → Pages**
-3. Set the source to **Deploy from a branch**
-4. Choose the `main` branch and the `/ (root)` folder
+1. Push this repo to GitHub.
+2. In GitHub, open **Settings -> Pages**.
+3. Set the source to **Deploy from a branch**.
+4. Choose the `main` branch and the `/ (root)` folder.
 
 ## Notes
 
-- Do not commit a raw unrestricted Google Maps API key
-- The old Google Maps Drawing Library is deprecated, so this app uses custom polygon drawing instead
+- This is a static single-page app.
+- The source of truth is `index.html`.
+- Panel placement is a planning estimate, not an engineering design.
+- Verify imagery alignment, roof dimensions, setbacks, obstacles, and electrical design on site.
