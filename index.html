@@ -395,7 +395,8 @@
         <label for="zoning-layer-toggle">Cadastral municipalities</label>
         <input type="checkbox" id="zoning-layer-toggle" onchange="setCadastralLayerVisibility()">
       </div>
-      <div class="zone-meta" id="selected-plot-status">Selected plot: finding parcel...</div>
+      <div class="zone-meta" id="selected-plot-status">Selected plot: search or center a Croatian parcel</div>
+      <div class="zone-meta" id="selected-plot-details"></div>
     </section>
 
     <section class="sidebar-section">
@@ -459,6 +460,7 @@ const CADASTRAL_WFS_URL = 'https://api.uredjenazemlja.hr/services/inspire/cp/wfs
 const PARCEL_LAYER_NAME = 'CP.CadastralParcel';
 const ZONING_LAYER_NAME = 'CP.CadastralZoning';
 const PARCEL_QUERY_HALF_SIZE_METERS = 30;
+const PARCEL_LOOKUP_TIMEOUT_MS = 8000;
 const DEFAULT_ZONE_SETTINGS = {
   panelWidth: 1,
   panelHeight: 1.7,
@@ -544,14 +546,14 @@ function initMap() {
   cadastralLayers = {
     parcels: new ol.layer.Image({
       visible: true,
-      opacity: 0.85,
+      opacity: 0.38,
       source: new ol.source.ImageWMS({
         url: CADASTRAL_WMS_URL,
         params: {
           LAYERS: PARCEL_LAYER_NAME,
           STYLES: 'CP.CadastralParcel.Default',
           FORMAT: 'image/png',
-          TRANSPARENT: true,
+          TRANSPARENT: 'TRUE',
           VERSION: '1.3.0'
         },
         projection: EPSG_3765,
@@ -561,14 +563,14 @@ function initMap() {
     }),
     zoning: new ol.layer.Image({
       visible: false,
-      opacity: 0.7,
+      opacity: 0.28,
       source: new ol.source.ImageWMS({
         url: CADASTRAL_WMS_URL,
         params: {
           LAYERS: ZONING_LAYER_NAME,
           STYLES: 'CP.CadastralZoning.Default',
           FORMAT: 'image/png',
-          TRANSPARENT: true,
+          TRANSPARENT: 'TRUE',
           VERSION: '1.3.0'
         },
         projection: EPSG_3765,
@@ -628,14 +630,16 @@ function initMap() {
   });
 
   map.on('singleclick', event => {
-    if (currentTool !== 'erase') return;
     const feature = map.forEachFeatureAtPixel(event.pixel, candidate => candidate);
     const zone = getZoneByFeature(feature);
-    if (zone) deleteZone(zone);
+    if (currentTool === 'erase') {
+      if (zone) deleteZone(zone);
+      return;
+    }
+    if (currentTool !== 'draw') {
+      queryParcelAtLonLat(ol.proj.toLonLat(event.coordinate));
+    }
   });
-
-  map.on('moveend', scheduleParcelQueryAtCenter);
-  scheduleParcelQueryAtCenter();
 }
 
 function registerCroatiaProjection() {
@@ -777,7 +781,7 @@ function buildParcelQueryUrl(lonLat) {
     TYPENAMES: 'cp:CadastralParcel',
     bbox,
     srsName: EPSG_3765,
-    outputFormat: 'application/json'
+    count: '10'
   });
   return `${CADASTRAL_WFS_URL}?${params.toString()}`;
 }
@@ -790,54 +794,95 @@ function queryParcelAtLonLat(lonLat) {
 
   parcelFetchController?.abort();
   parcelFetchController = new AbortController();
+  const lookupController = parcelFetchController;
+  const timeoutId = window.setTimeout(() => lookupController.abort('timeout'), PARCEL_LOOKUP_TIMEOUT_MS);
   setSelectedPlotStatus('Selected plot: finding parcel...');
 
   return fetch(buildParcelQueryUrl(lonLat), {
     headers: { Accept: 'application/json, application/gml+xml, text/xml' },
-    signal: parcelFetchController.signal
+    signal: lookupController.signal
   })
     .then(response => response.ok ? response.text() : Promise.reject(new Error('Parcel lookup failed')))
     .then(text => {
-      const parcel = parseParcelResponse(text);
+      const parcel = parseParcelResponse(text, lonLat);
       setSelectedParcel(parcel, parcel ? null : 'Selected plot: no parcel found');
       return parcel;
     })
     .catch(error => {
-      if (error.name === 'AbortError') return null;
+      if (error.name === 'AbortError' && lookupController !== parcelFetchController) return null;
       setSelectedParcel(null, 'Selected plot: unavailable');
       return null;
+    })
+    .finally(() => {
+      window.clearTimeout(timeoutId);
+      if (lookupController === parcelFetchController) parcelFetchController = null;
     });
 }
 
-function parseParcelResponse(text) {
+function parseParcelResponse(text, lonLat) {
   if (!text) return null;
   try {
     const data = JSON.parse(text);
-    const feature = data.features?.[0];
+    const feature = chooseParcelFeature(data.features || [], lonLat);
     if (!feature?.geometry) return null;
     return {
       id: getParcelLabel(feature.properties || {}, feature.id),
+      properties: feature.properties || {},
       coordinates: normalizeParcelCoordinates(feature.geometry.coordinates)
     };
   } catch (_) {
-    return parseGmlParcelResponse(text);
+    return parseGmlParcelResponse(text, lonLat);
   }
 }
 
-function parseGmlParcelResponse(text) {
+function parseGmlParcelResponse(text, lonLat) {
   const doc = new DOMParser().parseFromString(text, 'text/xml');
-  const posList = doc.querySelector('posList');
-  if (!posList) return null;
-  const values = posList.textContent.trim().split(/\s+/).map(Number).filter(Number.isFinite);
-  const coordinates = [];
-  for (let i = 0; i + 1 < values.length; i += 2) {
-    coordinates.push(transformParcelCoordinate([values[i], values[i + 1]]));
-  }
-  const labelNode = doc.querySelector('localId, label, nationalCadastralReference, name');
-  return {
-    id: labelNode?.textContent?.trim() || 'cadastral parcel',
-    coordinates: closeFreeRing(coordinates)
-  };
+  const posLists = getXmlElementsByLocalName(doc, 'posList');
+  if (!posLists.length) return null;
+
+  const parcels = posLists.map((posList, index) => {
+    const values = posList.textContent.trim().split(/\s+/).map(Number).filter(Number.isFinite);
+    const coordinates = [];
+    for (let i = 0; i + 1 < values.length; i += 2) {
+      coordinates.push(transformParcelCoordinate([values[i], values[i + 1]]));
+    }
+    return {
+      id: getGmlParcelLabel(doc, index),
+      properties: {},
+      coordinates: closeFreeRing(coordinates)
+    };
+  }).filter(parcel => parcel.coordinates.length >= 3);
+
+  return chooseParcel(parcels, lonLat);
+}
+
+function getXmlElementsByLocalName(doc, localName) {
+  return Array.from(doc.getElementsByTagName('*')).filter(node => node.localName === localName);
+}
+
+function getGmlParcelLabel(doc, index) {
+  const labels = ['nationalCadastralReference', 'localId', 'label', 'name']
+    .flatMap(name => getXmlElementsByLocalName(doc, name));
+  return labels[index]?.textContent?.trim() || labels[0]?.textContent?.trim() || 'cadastral parcel';
+}
+
+function chooseParcelFeature(features, lonLat) {
+  return features.find(feature => {
+    const coordinates = normalizeParcelCoordinates(feature.geometry?.coordinates || []);
+    return parcelContainsLonLat({ coordinates }, lonLat);
+  }) || features[0];
+}
+
+function chooseParcel(parcels, lonLat) {
+  return parcels.find(parcel => parcelContainsLonLat(parcel, lonLat)) || parcels[0] || null;
+}
+
+function parcelContainsLonLat(parcel, lonLat) {
+  if (!parcel?.coordinates?.length) return false;
+  const frame = getLocalFrame(parcel.coordinates);
+  const polygon = parcel.coordinates.map(([lon, lat]) => lonLatToLocalMeters(lon, lat, frame.originLon, frame.originLat));
+  const point = lonLatToLocalMeters(lonLat[0], lonLat[1], frame.originLon, frame.originLat);
+  return pointInPolygonOrOnBoundary(point, polygon);
 }
 
 function normalizeParcelCoordinates(coordinates) {
@@ -874,8 +919,10 @@ function setSelectedParcel(parcel, fallbackStatus) {
     ring.push(ring[0]);
     selectedParcelSource.addFeature(new ol.Feature(new ol.geom.Polygon([ring])));
     setSelectedPlotStatus(`Selected plot: ${selectedParcel.id}`);
+    setSelectedPlotDetails(getSelectedParcelInfo(selectedParcel));
   } else {
     setSelectedPlotStatus(fallbackStatus || 'Selected plot: none');
+    setSelectedPlotDetails('');
   }
 
   validateZonesAgainstSelectedParcel();
@@ -886,6 +933,32 @@ function setSelectedParcel(parcel, fallbackStatus) {
 function setSelectedPlotStatus(message) {
   const status = document.getElementById('selected-plot-status');
   if (status) status.textContent = message;
+}
+
+function setSelectedPlotDetails(message) {
+  const details = document.getElementById('selected-plot-details');
+  if (details) details.textContent = message;
+}
+
+function getSelectedParcelInfo(parcel) {
+  const area = getLonLatPolygonArea(parcel.coordinates);
+  const centroid = getLocalFrame(parcel.coordinates);
+  const municipality = parcel.properties?.cadastralZoning || parcel.properties?.name || parcel.properties?.label;
+  const parts = [
+    municipality ? `Municipality: ${municipality}` : '',
+    area ? `Approx. area: ${area.toFixed(0)} m2` : '',
+    `Center: ${centroid.originLat.toFixed(5)}, ${centroid.originLon.toFixed(5)}`
+  ].filter(Boolean);
+  return parts.join(' | ');
+}
+
+function getLonLatPolygonArea(coordinates) {
+  if (!coordinates?.length) return 0;
+  const ring = coordinates.map(coord => ol.proj.fromLonLat(coord));
+  ring.push(ring[0]);
+  return Math.abs(ol.sphere.getArea(new ol.geom.Polygon([ring]), {
+    projection: map.getView().getProjection()
+  }));
 }
 
 function getZoneByFeature(feature) {

@@ -148,7 +148,13 @@ def test_mock_wfs_selects_parcel_and_enforces_zone_containment(page):
 
     result = page.evaluate(
         """async () => {
-            await queryParcelAtLonLat([15.2314, 44.1194]);
+            const coordinate = ol.proj.fromLonLat([15.2314, 44.1194]);
+            map.dispatchEvent({
+              type: 'singleclick',
+              coordinate,
+              pixel: map.getPixelFromCoordinate(coordinate)
+            });
+            await new Promise(resolve => setTimeout(resolve, 250));
 
             function addZone(coords) {
               const ring = coords.map(coord => ol.proj.fromLonLat(coord));
@@ -180,7 +186,8 @@ def test_mock_wfs_selects_parcel_and_enforces_zone_containment(page):
               insideValid: inside.parcelValid,
               outsideValid: outside.parcelValid,
               instructions: document.getElementById('instructions').textContent,
-              status: document.getElementById('selected-plot-status').textContent
+              status: document.getElementById('selected-plot-status').textContent,
+              details: document.getElementById('selected-plot-details').textContent
             };
         }"""
     )
@@ -191,6 +198,8 @@ def test_mock_wfs_selects_parcel_and_enforces_zone_containment(page):
     assert result["outsideValid"] is False
     assert "Export blocked" in result["instructions"]
     assert "KO Zadar 123/4" in result["status"]
+    assert "Approx. area" in result["details"]
+    assert "Center:" in result["details"]
 
 
 def test_panel_layout_engine_is_deterministic(page):
